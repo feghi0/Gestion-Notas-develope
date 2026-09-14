@@ -50,7 +50,8 @@ Sistema integral de gestión de calificaciones desarrollado para la **Escuela T�
 - Nota final con lógica de PREVIA si no se aprueba ningún cierre
 - Boletines oficiales en PDF (uno por alumno) con firma institucional, empaquetados en ZIP
 - Envío automático de boletines por mail a alumno y familiar, con detección automática del período más avanzado cursado
-- **Importación de notas desde Excel** por parte del profesor: descarga una plantilla con sus alumnos, completa las notas y las importa de vuelta — si el alumno no existe en el sistema se crea automáticamente con contraseña temporal
+- **Importación de notas desde Excel** por parte del profesor: descarga una plantilla con sus alumnos, completa las notas y las importa de vuelta — si el alumno no existe en el sistema se crea automáticamente con contraseña temporal. Las columnas de bimestre solo se importan si no hay datos previos; las columnas de **cuatrimestre y nota final** siempre prevalecen sobre el cálculo automático (override)
+- **Override de notas calculadas**: cuando el Excel importado incluye cuatrimestre o nota final, ese valor queda "congelado" (🔒) en la planilla. Se puede liberar manualmente con el botón 🔓, o se libera automáticamente ante cualquier modificación manual (agregar nota, eliminar nota, registrar cierre)
 - **Exportación de planilla Excel del profesor** (por materia) con estilos, colores por período y notas calculadas incluidas
 - **Exportación de planilla Excel del secretario** (por curso completo): un workbook con hoja de resumen de notas finales + una hoja detallada por materia con el nombre del profesor a cargo
 - Diseño responsive con sistema de tokens CSS, Inter, degradés, sombras en capas y transiciones
@@ -78,9 +79,11 @@ Si un alumno desaprueba una evaluación (nota < 6), el profesor puede cargar una
 
 ### Cierres administrativos (Diciembre y Febrero)
 - Se habilitan automáticamente cuando el promedio anual es menor a 6 o algún cuatrimestre quedó DESAPROBADO
-- **1er Cierre (Diciembre):** el profesor selecciona, por alumno, el tema adeudado (cualquier nota <6 sin saldar, de cualquier bimestre o cierre anterior) y carga la nueva nota
-- **2do Cierre (Febrero):** el profesor selecciona, por alumno, alguno de los temas que seguían desaprobados tras diciembre, y carga la nueva nota
-- Ambos cierres son dinámicos: a medida que se cargan notas, los alumnos/temas que ya aprobaron desaparecen de los selectores
+- **1er Cierre (Diciembre):** el profesor selecciona, por alumno, el tema adeudado (cualquier nota <6 sin saldar de cualquier bimestre) y carga la nueva nota. El selector es dinámico e inteligente:
+  - Un alumno permanece en el selector **hasta que todos sus temas pendientes hayan sido evaluados**, independientemente de si los temas ya cargados aprobaron
+  - Cada tema que recibe una nota de cierre **desaparece del selector** de ese alumno; si se elimina esa nota, el tema vuelve a aparecer
+  - La nota final de diciembre solo se otorga cuando **todos** los temas adeudados fueron evaluados y todos aprobaron
+- **2do Cierre (Febrero):** el profesor selecciona, por alumno, los temas que salieron desaprobados en diciembre, y carga la nueva nota
 - Nota final = la nota del cierre donde aprobó (≥6); si no aprueba en ningún cierre, la nota final es **PREVIA**
 
 ---
@@ -121,8 +124,19 @@ El profesor puede, desde la planilla de cualquiera de sus materias:
 - **Importar el Excel** completado: SheetJS parsea el archivo en el navegador y envía los datos al backend, que los procesa alumno por alumno:
   - Busca el alumno por apellido + nombre (comparación accent e case insensitive)
   - Si no existe, lo crea con contraseña temporal `ET35` y lo inscribe al curso
-  - Solo importa los períodos que no tengan datos previos (no sobreescribe)
+  - Columnas de bimestre (B1–B4) y cierres: solo se importan si no hay datos previos en ese período — no sobreescriben
+  - Columnas de **cuatrimestre (CQ1, CQ2) y nota final (NF)**: siempre se importan como override, congelando el valor calculado
   - El panel de resultados muestra exactamente qué se importó, qué se omitió y qué usuarios nuevos se crearon con sus credenciales
+
+### Override de notas calculadas (🔒 / 🔓)
+
+Cuando el Excel importado incluye un valor en las columnas de cuatrimestre o nota final, ese valor "congela" el cálculo automático para ese alumno en esa materia:
+
+- La planilla web muestra el valor override con un **candado 🔒** visual
+- Un botón **🔓** aparece junto a ese valor (solo visible para quienes tienen permiso de escritura)
+- Al hacer clic en 🔓 se libera el override manualmente y el sistema vuelve al cálculo automático
+- El override también se libera automáticamente ante **cualquier modificación manual**: agregar una nota, eliminar una nota, o registrar una nota de cierre
+- Esto garantiza que una planilla importada se puede usar tal cual sin conflictos, pero si el docente hace cambios posteriores, el cálculo interno vuelve a tomar el control
 
 ---
 
@@ -524,8 +538,14 @@ node hash.js
 
 ### 7. Iniciar el servidor
 
+**Producción:**
 ```bash
 npm start
+```
+
+**Desarrollo (con hot-reload automático al guardar archivos):**
+```bash
+npm run dev
 ```
 
 Verificar en la consola que aparezca:
@@ -597,7 +617,7 @@ pm2 stop gestion-notas           # detener el servidor
 | Validación de entrada | Tipos, rangos y longitudes verificados en el backend antes de tocar la BD |
 | Body size limit | Máximo 10 kb por request JSON |
 | Variables de entorno | Secretos (JWT, Gmail) fuera del código fuente |
-| Manejo de errores global | Handler de errores y listeners de unhandledRejection/uncaughtException en server.js |
+| Manejo de errores global | Handler `.on("error")` en el servidor HTTP; try/catch en todas las rutas con respuesta estructurada |
 | Transacciones BD | INSERT y DELETE críticos con rollback automático ante error |
 | Foreign keys CASCADE | Integridad referencial automática en toda la base de datos, incluyendo evaluaciones acumulativas |
 
@@ -612,13 +632,16 @@ pm2 stop gestion-notas           # detener el servidor
 | GET | `/dashboard/:id` | JWT | Cursos (prof/prece/reg) o materias directas (alumno) |
 | GET | `/dashboard/curso/:cursoId` | JWT | Materias de un curso, con validación de ownership |
 | GET | `/planilla/:cmId/:uId` | JWT | Planilla completa de notas de una materia |
+| POST | `/planilla/evaluacion` | JWT | Carga nota individual para un alumno específico |
 | POST | `/planilla/evaluacion-global` | JWT | Carga global de evaluación para todo el curso |
-| PATCH | `/planilla/cierre-tema` | JWT | Nota de un tema en cierre de Diciembre o Febrero |
+| POST | `/planilla/cierre-global` | JWT | Registra notas de cierre (Dic/Feb) para múltiples alumnos |
+| PATCH | `/planilla/cierre-tema` | JWT | Nota de un tema en cierre de Diciembre o Febrero para un alumno |
 | DELETE | `/planilla/evaluacion/:id` | JWT | Eliminar evaluación de un alumno |
+| DELETE | `/planilla/override/:alumnoId` | JWT | Liberar manualmente el override de cuatrimestre/nota final de un alumno |
 | GET | `/planilla/plantilla/:cmId` | JWT | Descarga la plantilla Excel de la materia con alumnos y notas actuales |
 | POST | `/planilla/importar/:cmId` | JWT | Importa notas desde Excel; crea alumnos nuevos si no existen |
 | GET | `/boletines/cursos` | JWT | Listado de cursos para generación de boletines |
-| GET | `/boletines/generar/:cursoId` | JWT | Genera ZIP de boletines PDF + envío de mails opcional |
+| GET | `/boletines/generar/:cursoId` | JWT | Genera ZIP de boletines PDF + envío de mails opcional (`?enviarMails=false` para solo ZIP) |
 | GET | `/boletines/excel/:cursoId` | JWT | Genera Excel con todas las materias del curso (solo descarga local) |
 
 ---

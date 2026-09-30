@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Administrar Usuarios</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="styleUsuarios.css">
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>ET N°35</h1>
+    <p>Ingeniero Eduardo Latzina — Administrar Usuarios</p>
+  </div>
+  <button class="volver-dashboard-btn" onclick="location.href='dashboard.html'">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+    Dashboard
+  </button>
+</div>
+
+<div class="container">
+  <div class="nav-bar">
+    <button class="volver-btn" id="volverBtn" style="display:none;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      Volver
+    </button>
+    <span class="breadcrumb" id="breadcrumb"></span>
+  </div>
+  <div id="vista"></div>
+</div>
+
+<script src="api.js"></script>
+<script src="scriptUsuarios.js"></script>
+
+</body>
+</html>

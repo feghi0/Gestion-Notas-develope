@@ -22,6 +22,8 @@ document.getElementById("userInfo").textContent = usuario;
 if (rango === "regente") {
   const btn = document.getElementById("boletinesBtn");
   if (btn) btn.style.display = "inline-flex";
+  const btnUsuarios = document.getElementById("usuariosBtn");
+  if (btnUsuarios) btnUsuarios.style.display = "inline-flex";
 }
 
 function svgFolder() {

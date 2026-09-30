@@ -38,9 +38,9 @@ router.post("/login", loginLimiter, async (req, res) => {
     conn = await pool.getConnection();
 
     const rows = await conn.query(
-      "SELECT * FROM usuarios WHERE dni = ? LIMIT 1",
-      [dniLimpio]
-    );
+  "SELECT * FROM usuarios WHERE dni = ? AND activo = 1 LIMIT 1",
+  [dniLimpio]
+);
     const usuario = rows && rows.length > 0 ? rows[0] : null;
 
     const hashComparar = usuario ? usuario.password : DUMMY_HASH;

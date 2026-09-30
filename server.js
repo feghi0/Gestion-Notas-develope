@@ -10,6 +10,7 @@ app.use("/api",       require("./routes/auth"));
 app.use("/dashboard", require("./routes/dash"));
 app.use("/planilla",  require("./routes/planilla"));
 app.use("/boletines", require("./routes/boletines"));
+app.use("/usuarios", require("./routes/usuarios"));
 
 app.listen(3000, () => {
   console.log("Servidor corriendo en http://localhost:3000");

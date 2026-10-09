@@ -1,4 +1,11 @@
 require("dotenv").config();
+if (process.env.VERCEL && !process.env.DATABASE_URL) {
+  throw new Error("Falta configurar DATABASE_URL de Supabase");
+}
+
+if (process.env.DATABASE_URL) {
+  module.exports = require("./postgres").createPostgresPool();
+} else {
 const mariadb = require("mariadb");
 
 const pool = mariadb.createPool({
@@ -14,3 +21,4 @@ const pool = mariadb.createPool({
 });
 
 module.exports = pool;
+}

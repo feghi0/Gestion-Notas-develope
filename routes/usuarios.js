@@ -4,7 +4,7 @@ const pool            = require("../db/connection");
 const authMiddleware  = require("../middleware/auth");
 const bcrypt          = require("bcrypt");
 
-const PASSWORD_TEMPORAL = "ET35";
+const generarPasswordTemporal = require("../lib/temporaryPassword");
 
 function idEnteroValido(val) {
   const n = parseInt(val, 10);
@@ -172,6 +172,7 @@ router.post("/materia/:cursoMateriaId/profesor", authMiddleware, async (req, res
 
     let profesorId;
     let creoNuevo = false;
+    const passwordTemporal = generarPasswordTemporal();
 
     if (existente && existente.length > 0) {
       const u = existente[0];
@@ -183,7 +184,7 @@ router.post("/materia/:cursoMateriaId/profesor", authMiddleware, async (req, res
         await conn.query("UPDATE usuarios SET activo = 1 WHERE id = ?", [profesorId]);
       }
     } else {
-      const hash = await bcrypt.hash(PASSWORD_TEMPORAL, 10);
+      const hash = await bcrypt.hash(passwordTemporal, 10);
       const result = await conn.query(
         `INSERT INTO usuarios
            (usuario, password, nombre, apellido, dni, rango, permiso,
@@ -207,7 +208,7 @@ router.post("/materia/:cursoMateriaId/profesor", authMiddleware, async (req, res
       success: true,
       creoNuevo,
       usuario: dniLimpio,
-      passwordTemporal: creoNuevo ? PASSWORD_TEMPORAL : null
+      passwordTemporal: creoNuevo ? passwordTemporal : null
     });
 
   } catch (err) {
@@ -279,6 +280,7 @@ router.post("/curso/:cursoId/alumno", authMiddleware, async (req, res) => {
 
     let alumnoId;
     let creoNuevo = false;
+    const passwordTemporal = generarPasswordTemporal();
 
     await conn.beginTransaction();
 
@@ -293,7 +295,7 @@ router.post("/curso/:cursoId/alumno", authMiddleware, async (req, res) => {
         await conn.query("UPDATE usuarios SET activo = 1 WHERE id = ?", [alumnoId]);
       }
     } else {
-      const hash = await bcrypt.hash(PASSWORD_TEMPORAL, 10);
+      const hash = await bcrypt.hash(passwordTemporal, 10);
       const result = await conn.query(
         `INSERT INTO usuarios
            (usuario, password, nombre, apellido, dni, rango, permiso,
@@ -317,7 +319,7 @@ router.post("/curso/:cursoId/alumno", authMiddleware, async (req, res) => {
       success: true,
       creoNuevo,
       usuario: dniLimpio,
-      passwordTemporal: creoNuevo ? PASSWORD_TEMPORAL : null
+      passwordTemporal: creoNuevo ? passwordTemporal : null
     });
 
   } catch (err) {

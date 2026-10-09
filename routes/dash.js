@@ -50,7 +50,7 @@ router.get("/:id", authMiddleware, async (req, res) => {
         JOIN curso_materia cm ON cm.curso_id  = c.id
         JOIN materias m       ON m.id = cm.materia_id
         WHERE ac.alumno_id = ?
-        GROUP BY cm.id
+        GROUP BY cm.id, m.nombre, c.anio, c.division, cm.dias, cm.horario, u.nombre, u.apellido
         ORDER BY m.nombre
       `, [id]);
 

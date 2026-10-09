@@ -1,5 +1,9 @@
 # Gestión de Notas — ET N°35
 
+> **Deploy en Vercel + Supabase:** seguir [DEPLOY.md](DEPLOY.md). El esquema
+> PostgreSQL está en `supabase/migrations/`; los ejemplos MariaDB de este README
+> corresponden a la instalación local original.
+
 ## Sistema escolar web de gestión académica
 
 Sistema integral de gestión de calificaciones desarrollado para la **Escuela Técnica N°35 "Ingeniero Eduardo Latzina"** (Buenos Aires, Argentina). Permite registrar, calcular, auditar y emitir oficialmente las calificaciones de los alumnos de forma digital, centralizada y segura, con roles diferenciados para toda la comunidad educativa.

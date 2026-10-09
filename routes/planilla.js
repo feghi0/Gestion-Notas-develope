@@ -3,6 +3,7 @@ const router         = express.Router();
 const pool           = require("../db/connection");
 const authMiddleware = require("../middleware/auth");
 const bcrypt = require("bcrypt");
+const generarPasswordTemporal = require("../lib/temporaryPassword");
 const ExcelJS = require("exceljs");
 const { calcularResumenMateria } = require("../lib/calculoNotas");
 // ─── Helpers de acceso ────────────────────────────────────────────────────────
@@ -144,7 +145,8 @@ async function buscarAlumnoPorDniONombre(conn, dni, apellido, nombre) {
 
 async function crearAlumnoNuevo(conn, dni, apellido, nombre, cursoId) {
   const dniLimpio     = String(dni || "").trim();
-  const passwordHash  = await bcrypt.hash("ET35", 10);
+  const passwordTemporal = generarPasswordTemporal();
+  const passwordHash  = await bcrypt.hash(passwordTemporal, 10);
 
   const result = await conn.query(
     `INSERT INTO usuarios
@@ -160,7 +162,7 @@ async function crearAlumnoNuevo(conn, dni, apellido, nombre, cursoId) {
     [nuevoId, cursoId]
   );
 
-  return { id: nuevoId, usuario: dniLimpio };
+  return { id: nuevoId, usuario: dniLimpio, passwordTemporal };
 }
 
 async function asegurarInscripcion(conn, alumnoId, cursoId) {
@@ -581,7 +583,7 @@ router.post("/importar/:cursoMateriaId", authMiddleware, async (req, res) => {
           alumnoId                  = nuevo.id;
           filaRes.estado            = "creado";
           filaRes.usuarioCreado     = nuevo.usuario;
-          filaRes.passwordTemporal  = "ET35";
+          filaRes.passwordTemporal  = nuevo.passwordTemporal;
           estudiantesNuevos++;
         } catch (err) {
           filaRes.estado = "error";

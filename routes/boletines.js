@@ -7,7 +7,7 @@ const { PassThrough }  = require("stream");
 const { generarBoletinPDF } = require("../lib/generarBoletinPDF");
 const { calcularResumenMateria } = require("../lib/calculoNotas");
 const { detectarPeriodoMasAvanzado } = require("../lib/detectarPeriodo");
-const { enviarBoletinPorMail } = require("../lib/mailer");
+const { enviarBoletinPorMail, destinatariosBoletin } = require("../lib/mailer");
 const ExcelJS = require("exceljs");
 function idEnteroValido(val) {
   const n = parseInt(val, 10);
@@ -167,20 +167,19 @@ router.get("/generar/:cursoId", authMiddleware, async (req, res) => {
       // Agregar al ZIP (siempre, independientemente del resultado de los mails)
       archive.append(pdfBuffer, { name: nombreArchivo });
 
-      // ── Enviar los 2 mails (usuario + familiar) ──
+      // En testing, un único destinatario sustituye los correos de las familias.
       if (enviarMails) {
         const asunto = `Se envia informe: ${periodo}`;
         const nombreCompleto = `${alumno.nombre} ${alumno.apellido}`;
 
-        const [resUsuario, resFamiliar] = await Promise.all([
-          enviarBoletinPorMail(alumno.email_usuario, asunto, nombreCompleto, pdfBuffer, nombreArchivo),
-          enviarBoletinPorMail(alumno.email_familiar, asunto, nombreCompleto, pdfBuffer, nombreArchivo),
-        ]);
+        const envios = await Promise.all(destinatariosBoletin(alumno).map(async destinatario => ({
+          destinatario,
+          ...await enviarBoletinPorMail(destinatario, asunto, nombreCompleto, pdfBuffer, nombreArchivo),
+        })));
 
         resultadosMail.push({
           alumno: nombreCompleto,
-          email_usuario: { destinatario: alumno.email_usuario, ...resUsuario },
-          email_familiar: { destinatario: alumno.email_familiar, ...resFamiliar },
+          envios,
         });
       }
     }
@@ -191,7 +190,7 @@ router.get("/generar/:cursoId", authMiddleware, async (req, res) => {
     // porque el response ya se usó para el stream del ZIP)
     if (enviarMails) {
       const fallidos = resultadosMail.filter(
-        r => !r.email_usuario.ok || !r.email_familiar.ok
+        r => !r.envios.length || r.envios.some(envio => !envio.ok)
       );
       if (fallidos.length > 0) {
         console.warn("Boletines con error de envío de mail:", JSON.stringify(fallidos, null, 2));

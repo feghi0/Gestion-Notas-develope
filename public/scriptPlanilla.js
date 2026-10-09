@@ -1234,7 +1234,7 @@ function mostrarResultadoImportacion(resultado, advertencia = "") {
       ${advertencia}${statsHTML}${filasHTML}
       ${resumen.estudiantesNuevos > 0 ? `
         <p style="margin-top:12px;font-size:12.5px;color:#1d4ed8;background:#eff4ff;padding:10px 14px;border-radius:8px;">
-          💡 <strong>Alumnos nuevos creados</strong> con contraseña temporal <code>ET35</code>. Deben cambiarla al primer ingreso. Comunicales su usuario.
+          💡 <strong>Alumnos nuevos creados</strong> con contraseñas temporales individuales indicadas arriba. Deben cambiarlas al primer ingreso. Comunicales sus credenciales.
         </p>` : ""}
       <button class="import-cerrar-btn" onclick="document.getElementById('importResultado').style.display='none'">Cerrar</button>
     </div>`;

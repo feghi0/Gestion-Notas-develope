@@ -11,7 +11,7 @@ por la institución; no hay registro público ni separación entre escuelas.
 - Datos ficticios: un curso, dos materias y seis usuarios de los cinco roles.
 - Accesos de prueba: `.local/demo-credentials.json` (archivo privado local).
 - Verificados en producción: health, login de todos los roles, consulta de
-  planilla, Excel por materia y curso, y ZIP de boletines sin correo.
+  planilla, Excel por materia y curso, y ZIP de boletines con envío de correos vía Gmail.
 - GitHub conectado: Repositorio propio `feghi0/Gestion-Notas-develope`
   vinculado con Vercel. Despliegues automáticos (CI/CD) habilitados en cada push
   a `main`. El repositorio de Nazareno (`nazarenoapicella/Gestion-de-notas`)
@@ -51,8 +51,8 @@ de Supabase; las consultas pasan por el servidor Express autenticado.
 - `BOLETINES_TEST_EMAIL`: cuando está configurado, reemplaza todos los
   destinatarios por esa dirección y envía un solo correo por alumno.
   En testing se usa `gestionnotas35@gmail.com` como remitente y destinatario.
-  Falta la contraseña de aplicación de Gmail para activar el envío.
-  Quitar esta variable para volver a enviar a alumno y familiar.
+  Contraseña de aplicación configurada y envío verificado con éxito.
+  Quitar esta variable cuando se pase a producción real para enviar a alumno y familiar.
 
 La autenticación sigue usando los usuarios y roles de la escuela. Supabase se
 usa como PostgreSQL, no como sustituto automático del login por Supabase Auth.

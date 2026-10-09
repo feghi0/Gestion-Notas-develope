@@ -12,9 +12,10 @@ por la institución; no hay registro público ni separación entre escuelas.
 - Accesos de prueba: `.local/demo-credentials.json` (archivo privado local).
 - Verificados en producción: health, login de todos los roles, consulta de
   planilla, Excel por materia y curso, y ZIP de boletines sin correo.
-- GitHub no quedó conectado: Vercel informó que `feghi0` necesita permisos de
-  escritura o administración en `nazarenoapicella/Gestion-de-notas`. Los cambios
-  de adaptación están guardados localmente; no se hizo push al repositorio.
+- GitHub conectado: Repositorio propio `feghi0/Gestion-Notas-develope`
+  vinculado con Vercel. Despliegues automáticos (CI/CD) habilitados en cada push
+  a `main`. El repositorio de Nazareno (`nazarenoapicella/Gestion-de-notas`)
+  queda configurado como remote `upstream` para sincronizaciones futuras.
 
 La integración de Vercel provee `POSTGRES_URL`; se configuró `DATABASE_URL` con
 esa URI sin parámetros SSL que sobrescriban la validación del driver. Se añadió

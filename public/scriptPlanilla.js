@@ -251,7 +251,7 @@ function renderBimestre(evaluacionesAlumno, alumno, num) {
         ${badgeAcum}
         <div class="eval-desc">${escHTML(ev.descripcion)}</div>
         ${puedeEscribir()
-          ? `<button onclick="eliminarEvaluacion(${Number(ev.id)}, ${Number(alumno.id)})">Eliminar</button>`
+          ? `<button type="button" onclick="editarNota(this, ${Number(ev.id)}, ${Number(alumno.id)})">Editar</button> <button onclick="eliminarEvaluacion(${Number(ev.id)}, ${Number(alumno.id)})">Eliminar</button>`
           : ""}
       </div>`;
   }
@@ -277,7 +277,7 @@ function renderCeldaCierre1(evaluacionesAlumno, alumno, habilitado) {
         </div>
         <span class="eval-cierre-badge dic">Diciembre</span>
         ${puedeEscribir()
-          ? `<button onclick="eliminarEvaluacion(${Number(ev.id)}, ${Number(alumno.id)})">Eliminar</button>`
+          ? `<button type="button" onclick="editarNota(this, ${Number(ev.id)}, ${Number(alumno.id)})">Editar</button> <button onclick="eliminarEvaluacion(${Number(ev.id)}, ${Number(alumno.id)})">Eliminar</button>`
           : ""}
       </div>`;
   }
@@ -304,7 +304,7 @@ function renderCeldaCierre2(evaluacionesAlumno, alumno, habilitado) {
           </div>
           <span class="eval-cierre-badge feb">Febrero</span>
           ${puedeEscribir()
-            ? `<button onclick="eliminarEvaluacion(${Number(ev.id)}, ${Number(alumno.id)})">Eliminar</button>`
+            ? `<button type="button" onclick="editarNota(this, ${Number(ev.id)}, ${Number(alumno.id)})">Editar</button> <button onclick="eliminarEvaluacion(${Number(ev.id)}, ${Number(alumno.id)})">Eliminar</button>`
             : ""}
         </div>`;
     }
@@ -447,6 +447,45 @@ async function cargar() {
 }
 
 // ─── Eliminar evaluación ──────────────────────────────────────────────────────
+
+function editarNota(boton, evaluacionId, alumnoId) {
+  if (!puedeEscribir()) return;
+  const ev = evaluacionesGlobal.find(e => Number(e.id) === evaluacionId && Number(e.alumno_id) === alumnoId);
+  if (!ev) return;
+  const celda = boton.closest('.eval');
+  if (celda.querySelector('form')) return;
+  const form = document.createElement('form');
+  const input = document.createElement('input');
+  input.type = 'number'; input.step = 'any'; input.required = true;
+  input.min = esParticipacion(ev.tipo) ? '-1' : esCierre(ev) ? '1' : '0';
+  input.max = esParticipacion(ev.tipo) ? '1' : '10'; input.value = ev.nota;
+  input.setAttribute('aria-label', 'Nueva nota');
+  input.style.cssText = 'width:100%;padding:8px;margin-top:8px;';
+  const guardar = document.createElement('button');
+  guardar.type = 'submit'; guardar.textContent = 'Guardar';
+  const cancelar = document.createElement('button');
+  cancelar.type = 'button'; cancelar.textContent = 'Cancelar';
+  const error = document.createElement('p'); error.setAttribute('role', 'alert');
+  cancelar.onclick = () => { form.remove(); boton.focus(); };
+  form.append(input, guardar, cancelar, error); celda.appendChild(form);
+  input.focus(); input.select();
+  form.onsubmit = async event => {
+    event.preventDefault();
+    if (!form.reportValidity() || guardar.disabled) return;
+    guardar.disabled = cancelar.disabled = input.disabled = true;
+    error.textContent = '';
+    try {
+      const res = await apiFetch(`/planilla/evaluacion/${evaluacionId}`, {
+        method: 'PATCH', body: JSON.stringify({ alumnoId, cursoMateriaId, nota: Number(input.value), notaAnterior: Number(ev.nota) })
+      });
+      if (!res) return;
+      if (!res.ok) { const data = await res.json(); error.textContent = data.error || 'No pudimos guardar la nota.'; return; }
+      await cargar();
+      mostrarMensaje('Nota actualizada. El cambio quedó registrado en el historial.', 'success');
+    } catch (_) { error.textContent = 'No pudimos conectar con el servidor. Intentá nuevamente.'; }
+    finally { guardar.disabled = cancelar.disabled = input.disabled = false; }
+  };
+}
 
 async function eliminarEvaluacion(evaluacionId, alumnoId) {
   if (!puedeEscribir()) return;

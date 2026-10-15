@@ -1047,6 +1047,45 @@ router.delete("/override/:alumnoId", authMiddleware, async (req, res) => {
 
 // ─── DELETE evaluacion/:id ────────────────────────────────────────────────────
 
+router.patch("/evaluacion/:id", authMiddleware, async (req, res) => {
+  const { alumnoId, cursoMateriaId, nota, notaAnterior } = req.body || {};
+  const id = Number(req.params.id);
+  const numero = Number(nota);
+  if (![id, Number(alumnoId), Number(cursoMateriaId)].every(n => Number.isSafeInteger(n) && n > 0) ||
+      ![nota, notaAnterior].every(n => (typeof n === "number" || typeof n === "string") && String(n).trim() !== "" && Number.isFinite(Number(n)))) {
+    return res.status(400).json({ success: false, error: "Datos incompletos o inválidos" });
+  }
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const acceso = await verificarAcceso(conn, cursoMateriaId, req.user, true);
+    if (!acceso.ok) return res.status(acceso.status).json({ success: false, error: acceso.error });
+    if (!await alumnoEnCurso(conn, alumnoId, cursoMateriaId)) {
+      return res.status(403).json({ success: false, error: "El alumno no está inscripto en este curso" });
+    }
+    await conn.beginTransaction();
+    const [actual] = await conn.query(`SELECT n.id, n.nota, e.tipo, e.cierre, e.descripcion
+      FROM notas n JOIN evaluaciones e ON e.id=n.evaluacion_id
+      WHERE e.id=? AND e.curso_materia_id=? AND n.alumno_id=? FOR UPDATE OF n`, [id, cursoMateriaId, alumnoId]);
+    if (!actual) throw Object.assign(new Error("Nota no encontrada en esta materia"), { status: 404 });
+    const participacion = String(actual.tipo || "").toLowerCase().includes("particip");
+    const minimo = participacion ? -1 : Number(actual.cierre) > 0 ? 1 : 0;
+    const maximo = participacion ? 1 : 10;
+    if (numero < minimo || numero > maximo) throw Object.assign(new Error(`La nota debe estar entre ${minimo} y ${maximo}`), { status: 400 });
+    if (Number(actual.nota) !== Number(notaAnterior)) throw Object.assign(new Error("La nota cambió mientras la editabas. Actualizá la planilla e intentá nuevamente."), { status: 409 });
+    if (numero !== Number(actual.nota)) {
+      await conn.query("UPDATE notas SET nota=? WHERE id=?", [numero, actual.id]);
+      if (!String(actual.descripcion || "").startsWith("Import override:")) await limpiarOverridesAlumno(conn, alumnoId, cursoMateriaId);
+    }
+    await conn.commit();
+    res.json({ success: true });
+  } catch (err) {
+    if (conn) await conn.rollback().catch(() => {});
+    console.error("Error al editar nota:", err.code || err.status);
+    res.status(err.status || (err.code === "55000" ? 423 : 500)).json({ success: false, error: err.status ? err.message : err.code === "55000" ? "El ciclo está cerrado" : "No pudimos guardar la nota" });
+  } finally { if (conn) conn.release(); }
+});
+
 router.delete("/evaluacion/:id", authMiddleware, async (req, res) => {
   const { id } = req.params;
   const { alumnoId, cursoMateriaId } = req.body;

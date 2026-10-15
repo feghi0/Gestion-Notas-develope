@@ -66,9 +66,11 @@ async function generarBoletines() {
 
   btn.disabled = true;
   btn.textContent = "Generando boletines...";
+  document.getElementById("selectCurso").disabled = true;
+  document.getElementById("checkEnviarMails").disabled = true;
 
   const enviarMailsTexto = document.getElementById("checkEnviarMails").checked
-    ? " y enviando los mails correspondientes"
+    ? "; después se procesarán los correos y verás su resultado debajo"
     : "";
 
   estado.textContent = `Generando los PDFs${enviarMailsTexto}. Esto puede tardar varios segundos según la cantidad de alumnos.`;
@@ -79,7 +81,7 @@ async function generarBoletines() {
     const enviarMails =
       document.getElementById("checkEnviarMails").checked;
 
-    const endpoint = `/boletines/generar/${cursoId}?enviarMails=${enviarMails}`;
+    const endpoint = `/boletines/generar/${cursoId}?enviarMails=false`;
 
     const res = await fetch(endpoint, {
       method: "GET",
@@ -129,14 +131,20 @@ async function generarBoletines() {
     estado.textContent =
       "Boletines generados y descargados correctamente.";
     estado.className = "estado ok";
+    if (enviarMails) {
+      await prepararYEnviar(cursoId);
+      estado.textContent = "ZIP descargado. Consultá debajo el resultado de los correos y reintentá los fallidos si corresponde.";
+    }
   } catch (err) {
     console.error("Error al generar boletines:", err);
 
     estado.textContent =
-      "Error de conexión al generar los boletines.";
+      "No se completó la operación. Revisá el estado de los envíos antes de volver a intentar.";
     estado.className = "estado error";
   } finally {
     btn.disabled = false;
+    document.getElementById("selectCurso").disabled = false;
+    document.getElementById("checkEnviarMails").disabled = false;
     btn.textContent = "Generar boletines (ZIP)";
   }
 }
@@ -216,7 +224,7 @@ async function descargarExcel() {
 cargarCursos();
 initAyuda({
   porRol: {
-    secretario: "Elegí un curso y tocá 'Generar boletines' para descargar un PDF por cada alumno. Si dejás tildada la opción de mail, cada alumno y su familia lo reciben automáticamente por correo. El botón de Excel arma una planilla completa del curso para guardar en tu computadora — ese no se envía por mail.",
+    secretario: "Elegí un curso y generá el ZIP. Si marcás el envío por correo, consultá su resultado en Estado de los envíos. Podés continuar pendientes y reintentar fallidos. Los casos que requieren revisión deben comprobarse en Gmail. Excel solo se descarga.",
     regente: "Desde acá generás los boletines oficiales de cualquier curso: en PDF (con envío por mail opcional) o en Excel para uso interno del colegio."
   }
 });

@@ -1,6 +1,14 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { destinatariosBoletin } = require("../lib/mailer");
+const { clasificarErrorSMTP } = require("../lib/mailer");
+
+test("rechazos SMTP permiten reintentar y cortes sin confirmación requieren revisión", () => {
+  assert.equal(clasificarErrorSMTP({ code: "EAUTH" }).incierto, false);
+  assert.equal(clasificarErrorSMTP({ responseCode: 550, command: "RCPT TO" }).incierto, false);
+  assert.equal(clasificarErrorSMTP({ code: "ETIMEDOUT", command: "DATA" }).incierto, true);
+  assert.equal(clasificarErrorSMTP({ code: "ESOCKET" }).incierto, true);
+});
 
 test("testing reemplaza los correos originales por un único destinatario", t => {
   const previous = process.env.BOLETINES_TEST_EMAIL;

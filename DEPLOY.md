@@ -75,9 +75,10 @@ Verificar `/api/health` (200), login y acceso por rol. Probar carga de una nota,
 descarga Excel y ZIP de boletines. No enviar correos a personas reales durante
 las pruebas. Los datos demo no incluyen direcciones de correo.
 
-Los envíos de correo por curso siguen siendo síncronos: cursos grandes pueden
-alcanzar el tiempo máximo de una función. Para grandes volúmenes se necesita
-una cola de trabajos. El limitador de login original usa memoria por instancia,
+Los envíos se procesan en lotes de tres correos por petición. Los pendientes se
+conservan si se cierra la pantalla y pueden continuarse desde el panel. Para
+procesamiento autónomo sin una pantalla abierta se necesita un worker o una cola.
+El limitador de login original usa memoria por instancia,
 por lo que conviene añadir límites en Vercel Firewall para protección global.
 
 Para desplegar cada commit automáticamente, la cuenta que conecta GitHub en
@@ -118,6 +119,48 @@ todavía puede alterar o quitar esa protección; no es un registro externo invio
 Las pruebas ejecutan el esquema y los endpoints contra PostgreSQL embebido
 (PGlite), incluyendo login de todos los roles, permisos, inserciones, rollback,
 Excel y ZIP de PDF. No reemplazan la prueba final contra Supabase y Vercel.
+
+## Estado y reintentos de boletines
+
+Aplicar `supabase/migrations/20261015141030_bulletin_delivery_status.sql`
+antes de desplegar esta versión. La tabla `boletin_envios` tiene RLS y no admite
+acceso mediante las claves públicas de Supabase. Solo regentes y secretarios
+pueden consultar, preparar, procesar o reintentar correos desde Express.
+
+La descarga GET `/boletines/generar/:cursoId` solo genera el ZIP. El parámetro
+anterior `enviarMails=true` se rechaza para evitar envíos mediante GET.
+La pantalla usa POST para preparar los registros y procesar tres pendientes
+por petición, mostrando su resultado por alumno y destinatario. Los botones
+permiten continuar pendientes y reintentar únicamente fallidos confirmados.
+Hay filtro por estado y paginación de 50 registros.
+
+La clave única incluye curso, alumno, destinatario, remitente y hash de los
+datos del boletín (con año de emisión). Volver a preparar el mismo contenido no
+duplica registros ni reenvía los enviados. Un boletín con contenido diferente
+es una nueva versión. Los reintentos usan el PDF original almacenado, no las
+notas recalculadas. Los PDFs se eliminan de la tabla cuando se confirma el envío;
+los pendientes, fallidos y casos inciertos conservan el adjunto.
+
+`SELECT ... FOR UPDATE SKIP LOCKED` reserva cada envío y confirma el estado
+`enviando` antes de contactar Gmail; no mantiene la transacción durante SMTP.
+Se guardan intentos, último operador, fechas, error y Message-ID. El estado
+`enviado` significa que Gmail aceptó el mensaje, no que llegó o fue leído.
+
+Un rechazo explícito de SMTP queda como fallido y permite reintentar. Una
+desconexión con resultado ambiguo queda como `incierto`, sin reintento automático.
+Si el proceso se interrumpe antes de guardar el resultado, después de diez
+minutos la consulta del panel lo marca para revisión. El operador debe verificar
+Enviados en Gmail. SMTP no permite garantizar entrega exactamente una vez frente
+a cortes; por eso los casos ambiguos nunca se ponen automáticamente en pendiente.
+El panel proporciona la referencia Message-ID para buscar en Gmail. Tras revisar,
+el operador puede confirmar que se envió (sin mandar otro correo) o confirmar que
+no se envió (habilita un reintento explícito). Se guarda el último operador, la
+fecha de actualización y la confirmación manual.
+
+El registro comienza con esta versión: no reconstruye los correos enviados
+anteriormente. Las pruebas automatizadas y visuales usan transporte simulado;
+no envían mensajes reales. `BOLETINES_TEST_EMAIL` continúa redirigiendo todos
+los correos a la dirección de prueba configurada.
 
 Referencias: [Express en Vercel](https://vercel.com/docs/frameworks/backend/express)
 y [conexiones de Supabase](https://supabase.com/docs/guides/database/connecting-to-postgres).

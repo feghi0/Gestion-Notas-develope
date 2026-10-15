@@ -44,7 +44,7 @@
 
     <div class="form-group checkbox-row">
       <input type="checkbox" id="checkEnviarMails" checked>
-      <label for="checkEnviarMails">Enviar boletines por mail a alumnos y familiares</label>
+      <label for="checkEnviarMails">Enviar boletines por correo después de descargar el ZIP</label>
     </div>
 
     <button class="generar-btn" id="generarBtn" onclick="generarBoletines()">
@@ -61,16 +61,40 @@
 
 <div class="info-box">
   <strong>PDF (ZIP):</strong> genera un boletín individual por alumno, se descarga comprimido
-  y, si la opción está activada, se envía automáticamente por correo a cada alumno y familiar.<br><br>
+  y, si la opción está activada, prepara los correos y muestra su resultado debajo.<br><br>
   <strong>Excel:</strong> genera un archivo con todas las materias del curso y los promedios
   de todos los alumnos, listo para imprimir o archivar localmente. Incluye el nombre del
   profesor a cargo de cada materia. No se envía por mail.
 </div>
   </div>
+  <section class="card envios-card" aria-labelledby="tituloEnvios">
+    <h2 id="tituloEnvios">Estado de los envíos</h2>
+    <p class="subtitulo">Los boletines ya enviados no se duplican al generar el mismo contenido otra vez. Un envío aceptado por Gmail no confirma su lectura ni su llegada a la bandeja de entrada.</p>
+    <p id="modoEnvios" class="modo-envios"></p>
+    <div id="resumenEnvios" class="resumen-envios"></div>
+    <div class="envios-controles">
+      <label for="filtroEnvios">Estado</label>
+      <select id="filtroEnvios">
+        <option value="">Todos</option><option value="pendiente">Pendientes</option>
+        <option value="enviado">Enviados</option><option value="fallido">Fallidos</option>
+        <option value="enviando">En proceso</option><option value="incierto">Requieren revisión</option>
+        <option value="sin_email">Sin email válido</option>
+      </select>
+      <button type="button" id="actualizarEnvios">Actualizar</button>
+      <button type="button" id="continuarEnvios" disabled>Continuar pendientes</button>
+    </div>
+    <p id="estadoEnvios" role="status" aria-live="polite">Seleccioná un curso para consultar sus envíos.</p>
+    <div class="tabla-envios-scroll"><table aria-label="Envíos de boletines">
+      <thead><tr><th>Alumno / período</th><th>Destinatario</th><th>Estado</th><th>Intentos</th><th>Última actualización</th><th>Acción</th></tr></thead>
+      <tbody id="filasEnvios"></tbody>
+    </table></div>
+    <button type="button" id="masEnvios" hidden>Ver más envíos</button>
+  </section>
 </div>
 
 <script src="api.js"></script>
 <script src="scriptBoletines.js"></script>
+<script src="scriptEnvios.js"></script>
 
 </body>
 </html>

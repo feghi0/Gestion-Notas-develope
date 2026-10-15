@@ -11,6 +11,7 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
   const { sql, credentials } = await buildSeed();
   await db.exec(sql);
   await db.exec(fs.readFileSync("supabase/migrations/20261015135414_session_security_note_history.sql", "utf8"));
+  await db.exec(fs.readFileSync("supabase/migrations/20261015141030_bulletin_delivery_status.sql", "utf8"));
   const connection = wrapClient({
     async query(config) {
       const text = typeof config === "string" ? config : config.text;
@@ -45,6 +46,15 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
   assert.equal((await request("/api/health")).status, 200);
   assert.equal((await request("/usuarios/cursos")).status, 401);
   assert.equal((await request("/usuarios/cursos", student)).status, 403);
+  assert.equal((await request("/boletines/envios/1", student)).status, 403);
+  assert.equal((await request("/boletines/envios/1", teacher)).status, 403);
+  assert.equal((await request("/boletines/envios/1", tokens["90000004"])).status, 200);
+  assert.equal((await request("/boletines/envios/1/preparar", student, {})).status, 403);
+  assert.equal((await request("/boletines/envios/1/procesar", student, {})).status, 403);
+  assert.equal((await request("/boletines/envio/1/reintentar", student, {})).status, 403);
+  assert.equal((await request("/boletines/envio/1/resolver", student, { decision: "no_enviado" })).status, 403);
+  assert.equal((await request("/boletines/envios/1?estado=inventado", admin)).status, 400);
+  assert.equal((await request("/boletines/generar/1?enviarMails=true", admin)).status, 400);
   for (const url of ["/dashboard/1", "/dashboard/curso/1", "/usuarios/cursos", "/usuarios/curso/1/materias", "/usuarios/curso/1/alumnos", "/boletines/cursos"]) {
     assert.equal((await request(url, admin)).status, 200, url);
   }
@@ -157,5 +167,5 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
   assert.equal(newLogin.status, 200);
   assert.equal((await request("/dashboard/2", (await newLogin.json()).token)).status, 200);
   const rls = await db.query("SELECT tablename FROM pg_tables WHERE schemaname='public' AND rowsecurity");
-  assert.equal(rls.rows.length, 10);
+  assert.equal(rls.rows.length, 11);
 });

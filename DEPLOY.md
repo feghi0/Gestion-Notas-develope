@@ -185,3 +185,19 @@ abiertos. Los años cerrados conservan las consultas de alumnos dados de baja.
 
 La tabla de ciclos tiene RLS y acceso público revocado: se consulta a través del
 backend autenticado. Las pruebas usan una base aislada y correo simulado.
+
+## Cursos, materias y personal
+
+Desde `estructura.html` (enlace «Cursos y materias») el regente puede crear y
+editar cursos por ciclo, agregar o renombrar materias, configurar días y horarios,
+asignar un profesor a cada materia y varios preceptores por curso. Requiere
+permiso de escritura y ciclo abierto; la API también valida estas condiciones.
+No requiere una migración adicional. Renombrar una materia cambia únicamente
+su asignación a ese curso, sin alterar materias compartidas con otros ciclos.
+No se ofrecen eliminaciones de cursos o materias que puedan borrar notas.
+
+Se pueden crear cuentas de profesores y preceptores con DNI y contraseña temporal
+aleatoria, que debe cambiarse al ingresar. Crear una cuenta no la asigna: después
+hay que seleccionarla en el curso o materia. Quitar una asignación conserva la
+cuenta. Los profesores nuevos tienen escritura y los preceptores solo lectura.
+Las cuentas inactivas no se reactivan automáticamente desde este panel.

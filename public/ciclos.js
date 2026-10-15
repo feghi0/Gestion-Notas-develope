@@ -11,6 +11,7 @@ const ciclosReady = (async () => {
   host.prepend(bar);
   if (localStorage.getItem("rango") === "regente") {
     const link = document.createElement("a"); link.href="ciclos.html";link.textContent="Administrar ciclos";bar.appendChild(link);
+    const cursosLink = document.createElement("a"); cursosLink.href="estructura.html";cursosLink.textContent="Cursos y materias";bar.appendChild(cursosLink);
   }
   try {
     const res=await apiFetch("/ciclos"); if(!res)return;

@@ -52,8 +52,8 @@ async function guardarCurso(conn, req, editar) {
   const body = req.body || {};
   const anio = id(body.anio); if (anio > 7) fail(400, 'El año del curso debe estar entre 1 y 7.');
   const division = texto(body.division, 5).toUpperCase();
-  const turno = texto(body.turno, 30);
-  if (!['Mañana', 'Tarde', 'Noche'].includes(turno)) fail(400, 'Turno inválido');
+  const turno = texto(body.turno, 30).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (!['manana', 'tarde', 'noche'].includes(turno)) fail(400, 'Turno inválido');
   let ciclo;
   if (editar) ciclo = await cursoAbierto(conn, id(req.params.id));
   else { ciclo = await obtenerCiclo(conn, body.ciclo); if (ciclo.cerrado) fail(423, 'El ciclo está cerrado'); }

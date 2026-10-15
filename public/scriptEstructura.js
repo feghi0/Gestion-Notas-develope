@@ -1,3 +1,4 @@
+const etiquetaTurno = turno => ({ manana: 'Mañana', tarde: 'Tarde', noche: 'Noche' }[turno] || turno);
 let estructura = { cursos: [], personal: [] }, cursoDetalle = null, ocupado = false, revision = 0, detalleRevision = 0;
 const detalle = document.getElementById('detalle');
 const aviso = document.getElementById('aviso');
@@ -16,7 +17,7 @@ async function cargarEstructura() {
   const data = await consultar('/estructura' + cicloQuery());
   if (actual !== revision) return;
   estructura = data;
-  document.getElementById('listaCursos').innerHTML = data.cursos.length ? data.cursos.map(c => `<button type="button" class="estructura-item" data-curso="${Number(c.id)}">${Number(c.anio)}° ${escHTML(c.division)} · ${escHTML(c.turno)}</button>`).join('') : '<p>No hay cursos. Creá el primero para este ciclo.</p>';
+  document.getElementById('listaCursos').innerHTML = data.cursos.length ? data.cursos.map(c => `<button type="button" class="estructura-item" data-curso="${Number(c.id)}">${Number(c.anio)}° ${escHTML(c.division)} · ${escHTML(etiquetaTurno(c.turno))}</button>`).join('') : '<p>No hay cursos. Creá el primero para este ciclo.</p>';
   document.getElementById('nuevoCurso').hidden = !escribir();
   document.getElementById('formCurso').querySelectorAll('input,select,button').forEach(el => el.disabled = !escribir());
 }
@@ -29,9 +30,9 @@ async function abrirCurso(id) {
   const c = data.curso;
   const disabled = escribir() ? '' : 'disabled';
   detalle.hidden = false;
-  detalle.innerHTML = `<h2>${Number(c.anio)}° ${escHTML(c.division)} · ${escHTML(c.turno)}</h2>
+  detalle.innerHTML = `<h2>${Number(c.anio)}° ${escHTML(c.division)} · ${escHTML(etiquetaTurno(c.turno))}</h2>
   <p>${escribir() ? 'Los cambios afectan este curso del ciclo seleccionado.' : 'Solo lectura.'}</p>
-  <form class="estructura-form" data-tipo="curso"><label>Año del curso<input name="anio" type="number" min="1" max="7" value="${Number(c.anio)}" required ${disabled}></label><label>División<input name="division" maxlength="5" value="${escHTML(c.division)}" required ${disabled}></label><label>Turno<select name="turno" ${disabled}>${['Mañana','Tarde','Noche'].map(t => `<option ${c.turno === t ? 'selected' : ''}>${t}</option>`).join('')}</select></label><button ${disabled}>Guardar curso</button></form>
+  <form class="estructura-form" data-tipo="curso"><label>Año del curso<input name="anio" type="number" min="1" max="7" value="${Number(c.anio)}" required ${disabled}></label><label>División<input name="division" maxlength="5" value="${escHTML(c.division)}" required ${disabled}></label><label>Turno<select name="turno" ${disabled}>${['manana','tarde','noche'].map(t => `<option value="${t}" ${c.turno === t ? 'selected' : ''}>${etiquetaTurno(t)}</option>`).join('')}</select></label><button ${disabled}>Guardar curso</button></form>
   <h3>Materias y profesores</h3><div>${data.materias.map(m => {
     const p = data.profesores.find(p => Number(p.curso_materia_id) === Number(m.id));
     return `<article class="estructura-item"><h3>${escHTML(m.nombre)}</h3><form class="estructura-form" data-tipo="materia" data-id="${Number(m.id)}">${inputsMateria(m)}<button ${disabled}>Guardar materia</button></form>

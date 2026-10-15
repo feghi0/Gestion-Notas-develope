@@ -135,7 +135,7 @@ permiten continuar pendientes y reintentar únicamente fallidos confirmados.
 Hay filtro por estado y paginación de 50 registros.
 
 La clave única incluye curso, alumno, destinatario, remitente y hash de los
-datos del boletín (con año de emisión). Volver a preparar el mismo contenido no
+datos del boletín (con ciclo lectivo). Volver a preparar el mismo contenido no
 duplica registros ni reenvía los enviados. Un boletín con contenido diferente
 es una nueva versión. Los reintentos usan el PDF original almacenado, no las
 notas recalculadas. Los PDFs se eliminan de la tabla cuando se confirma el envío;
@@ -164,3 +164,24 @@ los correos a la dirección de prueba configurada.
 
 Referencias: [Express en Vercel](https://vercel.com/docs/frameworks/backend/express)
 y [conexiones de Supabase](https://supabase.com/docs/guides/database/connecting-to-postgres).
+
+## Ciclos lectivos
+
+Aplicar `supabase/migrations/20261015155214_academic_years.sql` antes de desplegar.
+Los cursos y datos existentes pertenecen inicialmente a 2026, abierto y actual.
+El selector de año filtra cursos, alumnos y boletines. Los PDFs y exportaciones
+identifican el ciclo del curso, independientemente de la fecha de descarga.
+
+Un regente con escritura puede administrar ciclos desde `ciclos.html`: crear,
+establecer el actual, cerrar o reabrir. Copiar un ciclo genera cursos y materias
+con nuevos identificadores; no copia alumnos, profesores, preceptores ni notas.
+Las inscripciones y notas quedan asociadas a los cursos de cada año.
+
+Cerrar un año bloquea modificaciones mediante la API y triggers de PostgreSQL;
+las consultas históricas y exportaciones siguen disponibles. Dar de baja a un
+alumno conserva su inscripción histórica y afecta solo al curso seleccionado.
+La cuenta se desactiva únicamente si no conserva inscripciones activas en años
+abiertos. Los años cerrados conservan las consultas de alumnos dados de baja.
+
+La tabla de ciclos tiene RLS y acceso público revocado: se consulta a través del
+backend autenticado. Las pruebas usan una base aislada y correo simulado.

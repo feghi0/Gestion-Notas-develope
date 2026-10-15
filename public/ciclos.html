@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ciclos lectivos</title><link rel="stylesheet" href="styleBoletines.css"></head><body>
+<div class="header"><div><h1>Ciclos lectivos</h1><p>ET N°35 · Administración por año escolar</p></div><a class="volver-btn" href="dashboard.html">Volver</a></div>
+<main class="container"><section class="card">
+<h2>Crear un ciclo lectivo</h2><p class="subtitulo">Copiá cursos y materias para preparar el nuevo año. Los alumnos, profesores, preceptores y notas se asignan por separado.</p>
+<form id="crearCiclo"><div class="form-group"><label for="nuevoAnio">Año</label><input id="nuevoAnio" type="number" min="2000" max="2100" required style="padding:12px;width:100%"></div>
+<div class="form-group"><label for="copiarCiclo">Copiar cursos y materias de</label><select id="copiarCiclo"><option value="">Sin copiar cursos</option></select></div>
+<button class="generar-btn" type="submit">Crear ciclo</button></form><p id="estadoCiclos" class="estado" role="status" aria-live="polite"></p>
+</section><section class="card envios-card"><h2>Ciclos disponibles</h2><p class="subtitulo">El ciclo actual se selecciona por defecto al ingresar. Cerrar un ciclo bloquea cambios en cursos, inscripciones y notas; sus consultas y boletines siguen disponibles. Podés reabrirlo para corregir información.</p><div id="listaCiclos"></div></section></main>
+<script src="api.js"></script><script src="scriptCiclos.js"></script></body></html>

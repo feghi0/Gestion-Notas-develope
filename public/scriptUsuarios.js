@@ -31,7 +31,7 @@ async function mostrarCursos() {
   vista.innerHTML = `<div class="cargando">Cargando cursos...</div>`;
 
   try {
-    const res = await apiFetch("/usuarios/cursos");
+    const res = await apiFetch("/usuarios/cursos" + cicloQuery());
     if (!res) return;
     const data = await res.json();
 
@@ -332,7 +332,7 @@ async function mostrarAlumnos() {
 }
 
 async function eliminarAlumno(alumnoId, nombreAlumno) {
-  if (!confirm(`¿Dar de baja a ${nombreAlumno}? Ya no va a poder iniciar sesión ni aparecer en las planillas, pero todas sus notas y evaluaciones quedan guardadas en el sistema.`)) return;
+  if (!confirm(`¿Dar de baja a ${nombreAlumno} de este curso? Se conservarán su inscripción histórica y sus notas. Si tiene otras inscripciones abiertas, conservará el acceso.`)) return;
 
   try {
     const res = await apiFetch(`/usuarios/curso/${cursoActual.id}/alumno/${alumnoId}`, { method: "DELETE" });
@@ -353,10 +353,11 @@ async function eliminarAlumno(alumnoId, nombreAlumno) {
 
 // ─── Inicio ────────────────────────────────────────────────────────────────
 
-mostrarCursos();
+ciclosReady.then(mostrarCursos);
+document.addEventListener("ciclochange",mostrarCursos);
 
 initAyuda({
   porRol: {
-    regente: "Entrá a un curso y elegí Materias o Alumnos. En Materias podés asignar o cambiar el profesor escribiendo su nombre, apellido y DNI. En Alumnos podés agregar o dar de baja: al dar de baja, el alumno pierde el acceso pero todas sus notas quedan guardadas para siempre."
+    regente: "Elegí el ciclo lectivo y entrá a un curso. Podés asignar profesores e inscribir alumnos por año. Una baja conserva el historial; la cuenta sigue activa si tiene otras inscripciones abiertas. Los ciclos cerrados son de solo lectura."
   }
 });

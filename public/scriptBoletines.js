@@ -15,7 +15,7 @@ async function cargarCursos() {
   const select = document.getElementById("selectCurso");
 
   try {
-    const res = await apiFetch("/boletines/cursos");
+    const res = await apiFetch("/boletines/cursos" + cicloQuery());
     if (!res) return;
 
     if (!res.ok) {
@@ -66,6 +66,7 @@ async function generarBoletines() {
 
   btn.disabled = true;
   btn.textContent = "Generando boletines...";
+  document.getElementById("selectCicloLectivo").disabled = true;
   document.getElementById("selectCurso").disabled = true;
   document.getElementById("checkEnviarMails").disabled = true;
 
@@ -143,6 +144,7 @@ async function generarBoletines() {
     estado.className = "estado error";
   } finally {
     btn.disabled = false;
+    document.getElementById("selectCicloLectivo").disabled = false;
     document.getElementById("selectCurso").disabled = false;
     document.getElementById("checkEnviarMails").disabled = false;
     btn.textContent = "Generar boletines (ZIP)";
@@ -221,7 +223,8 @@ async function descargarExcel() {
 }
 // ─── Inicio ────────────────────────────────────────────────────────────────────
 
-cargarCursos();
+ciclosReady.then(cargarCursos);
+document.addEventListener("ciclochange",()=>{document.getElementById("selectCurso").value="";document.getElementById("selectCurso").dispatchEvent(new Event("change"));cargarCursos();});
 initAyuda({
   porRol: {
     secretario: "Elegí un curso y generá el ZIP. Si marcás el envío por correo, consultá su resultado en Estado de los envíos. Podés continuar pendientes y reintentar fallidos. Los casos que requieren revisión deben comprobarse en Gmail. Excel solo se descarga.",

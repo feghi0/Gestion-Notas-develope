@@ -80,7 +80,7 @@ async function cargarEstadoEnvios(append = false) {
 
 function bloquearEnvios(busy) {
   enviandoBoletines = busy;
-  for (const id of ["selectCurso", "checkEnviarMails", "generarBtn", "continuarEnvios", "actualizarEnvios", "filtroEnvios", "masEnvios"]) document.getElementById(id).disabled = busy;
+  for (const id of ["selectCicloLectivo", "selectCurso", "checkEnviarMails", "generarBtn", "continuarEnvios", "actualizarEnvios", "filtroEnvios", "masEnvios"]) document.getElementById(id).disabled = busy;
   for (const button of document.querySelectorAll("#filasEnvios button")) button.disabled = busy;
 }
 

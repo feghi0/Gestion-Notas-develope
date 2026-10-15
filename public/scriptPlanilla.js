@@ -4,6 +4,7 @@ const permiso        = localStorage.getItem("permiso");
 const rango          = localStorage.getItem("rango");
 const tbody          = document.getElementById("tbody");
 
+let cicloSoloLectura = false;
 let alumnosGlobales    = [];
 let evaluacionesGlobal = [];
 let cierreActivo       = 1;
@@ -52,7 +53,7 @@ function formatearNotaNum(n) {
 }
 
 function puedeEscribir() {
-  return permiso === "escritura" || permiso === "ambos";
+  return !cicloSoloLectura && (permiso === "escritura" || permiso === "ambos");
 }
 
 // ─── Lógica de acumulativos ───────────────────────────────────────────────────
@@ -321,10 +322,11 @@ async function cargar() {
     if (!res.ok) { mostrarMensaje("No pudimos cargar la planilla. Recargá la página e intentá de nuevo.", "error"); return; }
 
     const data = await res.json();
+    cicloSoloLectura=data.cicloCerrado;
 
     document.getElementById("materiaTitulo").textContent = data.materia.materia;
     document.getElementById("materiaInfo").textContent =
-      `${data.materia.anio}° ${data.materia.division} • ${data.materia.dias} • ${data.materia.horario}`;
+      `Ciclo ${data.materia.ciclo_lectivo}${cicloSoloLectura ? " · Solo lectura" : ""} · ${data.materia.anio}° ${data.materia.division} • ${data.materia.dias} • ${data.materia.horario}`;
 
     tbody.innerHTML    = "";
     alumnosGlobales    = data.alumnos;

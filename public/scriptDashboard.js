@@ -35,7 +35,7 @@ async function cargarCursos() {
   document.getElementById("breadcrumb").textContent   = "";
 
   try {
-    const res = await apiFetch("/dashboard/" + id);
+    const res = await apiFetch("/dashboard/" + id + cicloQuery());
     if (!res) return;
 
     if (!res.ok) {
@@ -172,7 +172,7 @@ async function cargarMateriasAlumno() {
   document.getElementById("breadcrumb").textContent   = "";
 
   try {
-    const res = await apiFetch("/dashboard/" + id);
+    const res = await apiFetch("/dashboard/" + id + cicloQuery());
     if (!res) return;
 
     if (!res.ok) {
@@ -230,6 +230,7 @@ function volverACursos() {
   cargarCursos();
 }
 
+function iniciarDashboard() {
 if (rango === "secretario") {
   location.href = "boletines.html";
 } else if (rango === "alumno") {
@@ -239,6 +240,10 @@ if (rango === "secretario") {
 } else {
   document.getElementById("grid").innerHTML = "<p class='vacio-msg'>Rol no reconocido.</p>";
 }
+
+}
+ciclosReady.then(iniciarDashboard);
+document.addEventListener("ciclochange",iniciarDashboard);
 
 initAyuda({
   porRol: {

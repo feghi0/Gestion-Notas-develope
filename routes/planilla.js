@@ -5,10 +5,11 @@ const authMiddleware = require("../middleware/auth");
 const bcrypt = require("bcrypt");
 const generarPasswordTemporal = require("../lib/temporaryPassword");
 const ExcelJS = require("exceljs");
+const { cursoAbierto } = require("../lib/ciclosLectivos");
 const { calcularResumenMateria } = require("../lib/calculoNotas");
 // ─── Helpers de acceso ────────────────────────────────────────────────────────
 
-async function verificarAcceso(conn, cursoMateriaId, user, requiereEscritura = false) {
+async function verificarPermisoMateria(conn, cursoMateriaId, user, requiereEscritura = false) {
   const { id, rango, permiso } = user;
 
   if (rango === "regente") {
@@ -56,7 +57,7 @@ async function verificarAcceso(conn, cursoMateriaId, user, requiereEscritura = f
       SELECT ac.id
       FROM alumno_curso ac
       JOIN curso_materia cm ON ac.curso_id = cm.curso_id
-      WHERE ac.alumno_id = ? AND cm.id = ?
+      WHERE ac.alumno_id = ? AND cm.id = ? AND (ac.activo=1 OR EXISTS (SELECT 1 FROM cursos c JOIN ciclos_lectivos cl ON cl.anio=c.ciclo_lectivo WHERE c.id=ac.curso_id AND cl.cerrado))
     `, [id, cursoMateriaId]);
     if (!ac || ac.length === 0) {
       return { ok: false, status: 403, error: "No estás inscripto en este curso" };
@@ -67,13 +68,20 @@ async function verificarAcceso(conn, cursoMateriaId, user, requiereEscritura = f
   return { ok: false, status: 403, error: "Rango no reconocido" };
 }
 
+async function verificarAcceso(conn, cursoMateriaId, user, requiereEscritura = false) {
+  const acceso = await verificarPermisoMateria(conn,cursoMateriaId,user,requiereEscritura);
+  if (!acceso.ok || !requiereEscritura) return acceso;
+  try { await cursoAbierto(conn,cursoMateriaId,true); return acceso; }
+  catch (err) { if (err.status) return {ok:false,status:err.status,error:err.message}; throw err; }
+}
+
 async function alumnosEnCurso(conn, alumnoIds, cursoMateriaId) {
   if (!alumnoIds || alumnoIds.length === 0) return { ok: true, faltante: null };
   const rows = await conn.query(`
     SELECT DISTINCT ac.alumno_id
     FROM alumno_curso ac
     JOIN curso_materia cm ON ac.curso_id = cm.curso_id
-    WHERE ac.alumno_id IN (?) AND cm.id = ?
+    WHERE ac.alumno_id IN (?) AND ac.activo=1 AND cm.id = ?
   `, [alumnoIds, cursoMateriaId]);
   const inscritosSet = new Set(rows.map(r => Number(r.alumno_id)));
   for (const aid of alumnoIds) {
@@ -89,7 +97,7 @@ async function alumnoEnCurso(conn, alumnoId, cursoMateriaId) {
     SELECT ac.id
     FROM alumno_curso ac
     JOIN curso_materia cm ON ac.curso_id = cm.curso_id
-    WHERE ac.alumno_id = ? AND cm.id = ?
+    WHERE ac.alumno_id = ? AND cm.id = ? AND ac.activo=1
   `, [alumnoId, cursoMateriaId]);
   return rows && rows.length > 0;
 }
@@ -158,7 +166,7 @@ async function crearAlumnoNuevo(conn, dni, apellido, nombre, cursoId) {
 
   const nuevoId = Number(result.insertId);
   await conn.query(
-    "INSERT IGNORE INTO alumno_curso (alumno_id, curso_id) VALUES (?, ?)",
+    "INSERT INTO alumno_curso (alumno_id, curso_id) VALUES (?, ?) ON CONFLICT (alumno_id, curso_id) DO UPDATE SET activo=1",
     [nuevoId, cursoId]
   );
 
@@ -167,7 +175,7 @@ async function crearAlumnoNuevo(conn, dni, apellido, nombre, cursoId) {
 
 async function asegurarInscripcion(conn, alumnoId, cursoId) {
   await conn.query(
-    "INSERT IGNORE INTO alumno_curso (alumno_id, curso_id) VALUES (?, ?)",
+    "INSERT INTO alumno_curso (alumno_id, curso_id) VALUES (?, ?) ON CONFLICT (alumno_id, curso_id) DO UPDATE SET activo=1",
     [alumnoId, cursoId]
   );
 }
@@ -297,7 +305,7 @@ router.get("/plantilla/:cursoMateriaId", authMiddleware, async (req, res) => {
 
     // Datos de la materia
     const materiaRows = await conn.query(`
-      SELECT m.nombre AS materia, c.anio, c.division, c.turno, cm.dias, cm.horario
+      SELECT m.nombre AS materia, c.ciclo_lectivo, c.anio, c.division, c.turno, cm.dias, cm.horario
       FROM curso_materia cm
       JOIN materias m ON m.id = cm.materia_id
       JOIN cursos   c ON c.id = cm.curso_id
@@ -314,7 +322,7 @@ router.get("/plantilla/:cursoMateriaId", authMiddleware, async (req, res) => {
   SELECT u.id, u.nombre, u.apellido, u.dni
   FROM alumno_curso ac
   JOIN usuarios u ON ac.alumno_id = u.id
-  WHERE ac.curso_id = (SELECT curso_id FROM curso_materia WHERE id = ?)
+  WHERE ac.curso_id = (SELECT curso_id FROM curso_materia WHERE id = ?) AND (ac.activo=1 OR EXISTS (SELECT 1 FROM cursos c JOIN ciclos_lectivos cl ON cl.anio=c.ciclo_lectivo WHERE c.id=ac.curso_id AND cl.cerrado))
     AND u.rango = 'alumno'
   ORDER BY u.apellido, u.nombre
 `, [cursoMateriaId]);
@@ -345,7 +353,7 @@ router.get("/plantilla/:cursoMateriaId", authMiddleware, async (req, res) => {
     ws.mergeCells("A1:K1");
     ws.getRow(1).height = 38;
     const cTitle = ws.getCell("A1");
-    cTitle.value = `PLANILLA DE NOTAS — ${mat.materia.toUpperCase()} — ${mat.anio}°${mat.division} — ${mat.turno.toUpperCase()}`;
+    cTitle.value = `PLANILLA DE NOTAS — ${mat.materia.toUpperCase()} — CICLO ${mat.ciclo_lectivo} — ${mat.anio}°${mat.division} — ${mat.turno.toUpperCase()}`;
     cTitle.font      = { bold: true, size: 14, color: { argb: "FFFFFFFF" }, name: "Calibri" };
     cTitle.fill      = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0A0A0A" } };
     cTitle.alignment = { horizontal: "center", vertical: "middle" };
@@ -477,7 +485,7 @@ router.get("/plantilla/:cursoMateriaId", authMiddleware, async (req, res) => {
       .replace(/\s+/g, "_")
       .replace(/[^a-zA-Z0-9_]/g, "");
     const fechaArchivo = new Date().toLocaleDateString("es-AR").replace(/\//g, "-");
-    const filename = `Planilla_${mat.anio}°${mat.division}_${normNombre}_${fechaArchivo}.xlsx`;
+    const filename = `Planilla_${mat.ciclo_lectivo}_${mat.anio}°${mat.division}_${normNombre}_${fechaArchivo}.xlsx`;
 
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -1242,7 +1250,7 @@ router.get("/:cursoMateriaId/:usuarioId", authMiddleware, async (req, res) => {
       SELECT
         cm.id   AS curso_materia_id,
         m.nombre AS materia,
-        c.anio,
+        c.anio, c.ciclo_lectivo,
         c.division,
         cm.dias,
         cm.horario
@@ -1280,7 +1288,7 @@ router.get("/:cursoMateriaId/:usuarioId", authMiddleware, async (req, res) => {
         INNER JOIN cursos c        ON cm.curso_id  = c.id
         INNER JOIN alumno_curso ac ON c.id         = ac.curso_id
         INNER JOIN usuarios u      ON ac.alumno_id = u.id
-        WHERE cm.id = ? AND u.rango = 'alumno'
+        WHERE cm.id = ? AND u.rango = 'alumno' AND (ac.activo=1 OR EXISTS (SELECT 1 FROM ciclos_lectivos cl WHERE cl.anio=c.ciclo_lectivo AND cl.cerrado))
         ORDER BY u.apellido, u.nombre
       `, [cursoMateriaId]);
       evaluaciones = await conn.query(`
@@ -1295,8 +1303,10 @@ router.get("/:cursoMateriaId/:usuarioId", authMiddleware, async (req, res) => {
       `, [cursoMateriaId]);
     }
 
+    const ciclo=(await conn.query("SELECT cl.cerrado FROM ciclos_lectivos cl JOIN cursos c ON c.ciclo_lectivo=cl.anio JOIN curso_materia cm ON cm.curso_id=c.id WHERE cm.id=?",[cursoMateriaId]))[0];
     res.json({
       success: true,
+      cicloCerrado: ciclo.cerrado,
       user:    { id: user.id, permiso: user.permiso, rango: user.rango },
       materia: materia[0],
       alumnos,

@@ -11,6 +11,7 @@ const { enviarBoletinPorMail } = require("../lib/mailer");
 const { createDeliveryService } = require("../lib/boletinEnvios");
 const delivery = createDeliveryService({ pool, sendMail: enviarBoletinPorMail });
 const ExcelJS = require("exceljs");
+const { obtenerCiclo } = require("../lib/ciclosLectivos");
 function idEnteroValido(val) {
   const n = parseInt(val, 10);
   return !isNaN(n) && n > 0;
@@ -34,9 +35,8 @@ router.get("/cursos", authMiddleware, async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
-    const cursos = await conn.query(
-      "SELECT id, anio, division, turno FROM cursos ORDER BY anio, division"
-    );
+    const ciclo=await obtenerCiclo(conn,req.query.ciclo);
+    const cursos=await conn.query("SELECT id, anio, division, turno, ciclo_lectivo FROM cursos WHERE ciclo_lectivo=? ORDER BY anio, division",[ciclo.anio]);
     res.json({ success: true, cursos });
   } catch (err) {
     console.error("Error al listar cursos:", err);
@@ -59,7 +59,7 @@ router.get("/generar/:cursoId", authMiddleware, async (req, res) => {
     const { curso, boletines } = await cargarBoletinesCurso(conn, req.params.cursoId);
     conn.release(); conn = null;
     res.setHeader("Content-Type", "application/zip");
-    res.setHeader("Content-Disposition", 'attachment; filename="' + normalizarNombreArchivo('Boletines_' + curso.anio + curso.division + '.zip') + '"');
+    res.setHeader("Content-Disposition", 'attachment; filename="' + normalizarNombreArchivo('Boletines_' + curso.ciclo_lectivo + '_' + curso.anio + curso.division + '.zip') + '"');
     const archive = archiver("zip", { zlib: { level: 9 } });
     archive.on("error", err => { console.error("Error ZIP:", err.message); res.destroy(); });
     archive.pipe(res);
@@ -123,7 +123,7 @@ router.get("/excel/:cursoId", authMiddleware, async (req, res) => {
 
     // Datos del curso
     const cursoRows = await conn.query(
-      "SELECT id, anio, division, turno FROM cursos WHERE id = ?",
+      "SELECT id, anio, division, turno, ciclo_lectivo FROM cursos WHERE id = ?",
       [cursoId]
     );
     if (!cursoRows || cursoRows.length === 0) {
@@ -157,7 +157,7 @@ router.get("/excel/:cursoId", authMiddleware, async (req, res) => {
       SELECT u.id, u.nombre, u.apellido
       FROM alumno_curso ac
       JOIN usuarios u ON ac.alumno_id = u.id
-      WHERE ac.curso_id = ? AND u.rango = 'alumno'
+      WHERE ac.curso_id = ? AND u.rango = 'alumno' AND (ac.activo=1 OR EXISTS (SELECT 1 FROM cursos c JOIN ciclos_lectivos cl ON cl.anio=c.ciclo_lectivo WHERE c.id=ac.curso_id AND cl.cerrado))
       ORDER BY u.apellido, u.nombre
     `, [cursoId]);
 
@@ -250,7 +250,7 @@ router.get("/excel/:cursoId", authMiddleware, async (req, res) => {
     wsResumen.mergeCells(1, 1, 1, 2 + materias.length);
     wsResumen.getRow(1).height = 36;
     const rTitle = wsResumen.getCell("A1");
-    rTitle.value = `RESUMEN DE CALIFICACIONES — ${curso.anio}°${curso.division} — ${curso.turno.toUpperCase()} — ${fechaStr}`;
+    rTitle.value = `RESUMEN DE CALIFICACIONES — CICLO ${curso.ciclo_lectivo} — ${curso.anio}°${curso.division} — ${curso.turno.toUpperCase()} — ${fechaStr}`;
     rTitle.font      = { bold: true, size: 13, color: { argb: COLOR.blanco }, name: "Calibri" };
     rTitle.fill      = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR.negro } };
     rTitle.alignment = { horizontal: "center", vertical: "middle" };
@@ -485,7 +485,7 @@ router.get("/excel/:cursoId", authMiddleware, async (req, res) => {
 
     // ── Nombre del archivo ────────────────────────────────────────────────────
     const fechaArchivo = new Date().toLocaleDateString("es-AR").replace(/\//g, "-");
-    const filename = `Calificaciones_${curso.anio}${curso.division}_${fechaArchivo}.xlsx`;
+    const filename = `Calificaciones_${curso.ciclo_lectivo}_${curso.anio}${curso.division}_${fechaArchivo}.xlsx`;
 
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);

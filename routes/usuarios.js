@@ -3,6 +3,7 @@ const router          = express.Router();
 const pool            = require("../db/connection");
 const authMiddleware  = require("../middleware/auth");
 const bcrypt          = require("bcrypt");
+const { obtenerCiclo, cursoAbierto } = require("../lib/ciclosLectivos");
 
 const generarPasswordTemporal = require("../lib/temporaryPassword");
 
@@ -32,14 +33,14 @@ router.get("/cursos", authMiddleware, async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
-    const rows = await conn.query(
-      "SELECT id, anio, division, turno FROM cursos ORDER BY anio, division"
-    );
+    const ciclo=await obtenerCiclo(conn,req.query.ciclo);
+    const rows = await conn.query("SELECT id, anio, division, turno, ciclo_lectivo FROM cursos WHERE ciclo_lectivo=? ORDER BY anio, division",[ciclo.anio]);
     const cursos = rows.map(c => ({
-      id: Number(c.id), anio: Number(c.anio), division: c.division, turno: c.turno
+      id: Number(c.id), anio: Number(c.anio), division: c.division, turno: c.turno, ciclo_lectivo: c.ciclo_lectivo
     }));
     res.json({ success: true, cursos });
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ success:false, error:err.message });
     console.error("Error al listar cursos:", err);
     res.status(500).json({ success: false, error: "No pudimos cargar los cursos." });
   } finally {
@@ -90,6 +91,7 @@ router.get("/curso/:cursoId/materias", authMiddleware, async (req, res) => {
 
     res.json({ success: true, materias });
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ success:false, error:err.message });
     console.error("Error al listar materias del curso:", err);
     res.status(500).json({ success: false, error: "No pudimos cargar las materias de este curso." });
   } finally {
@@ -113,9 +115,11 @@ router.get("/curso/:cursoId/alumnos", authMiddleware, async (req, res) => {
     const rows = await conn.query(`
       SELECT u.id, u.nombre, u.apellido, u.dni, COUNT(n.id) AS cantidad_notas
       FROM alumno_curso ac
-      JOIN usuarios u ON u.id = ac.alumno_id AND u.activo = 1
-      LEFT JOIN notas n ON n.alumno_id = u.id
-      WHERE ac.curso_id = ?
+      JOIN cursos c ON c.id=ac.curso_id
+      JOIN ciclos_lectivos cl ON cl.anio=c.ciclo_lectivo
+      JOIN usuarios u ON u.id = ac.alumno_id
+      LEFT JOIN notas n ON n.alumno_id = u.id AND n.evaluacion_id IN (SELECT e.id FROM evaluaciones e JOIN curso_materia cm ON cm.id=e.curso_materia_id WHERE cm.curso_id=ac.curso_id)
+      WHERE ac.curso_id = ? AND ((ac.activo=1 AND u.activo=1) OR cl.cerrado)
       GROUP BY u.id, u.nombre, u.apellido, u.dni
       ORDER BY u.apellido, u.nombre
     `, [cursoId]);
@@ -127,6 +131,7 @@ router.get("/curso/:cursoId/alumnos", authMiddleware, async (req, res) => {
 
     res.json({ success: true, alumnos });
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ success:false, error:err.message });
     console.error("Error al listar alumnos del curso:", err);
     res.status(500).json({ success: false, error: "No pudimos cargar los alumnos de este curso." });
   } finally {
@@ -163,6 +168,7 @@ router.post("/materia/:cursoMateriaId/profesor", authMiddleware, async (req, res
   try {
     conn = await pool.getConnection();
 
+    await cursoAbierto(conn, cursoMateriaId, true);
     const cmRows = await conn.query("SELECT id FROM curso_materia WHERE id = ?", [cursoMateriaId]);
     if (!cmRows || cmRows.length === 0) {
       return res.status(404).json({ success: false, error: "Esa materia no existe." });
@@ -198,6 +204,7 @@ router.post("/materia/:cursoMateriaId/profesor", authMiddleware, async (req, res
 
     // Reemplazo total: se borra cualquier asignación previa de esta materia
     // y se deja solo la nueva, para que siempre haya un único responsable.
+    await cursoAbierto(conn, cursoMateriaId, true);
     await conn.query("DELETE FROM profesor_materia WHERE curso_materia_id = ?", [cursoMateriaId]);
     await conn.query(
       "INSERT INTO profesor_materia (profesor_id, curso_materia_id) VALUES (?, ?)",
@@ -212,6 +219,7 @@ router.post("/materia/:cursoMateriaId/profesor", authMiddleware, async (req, res
     });
 
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ success:false, error:err.message });
     console.error("Error al asignar profesor:", err);
     res.status(500).json({ success: false, error: "No pudimos asignar el profesor a esta materia." });
   } finally {
@@ -234,9 +242,11 @@ router.delete("/materia/:cursoMateriaId/profesor", authMiddleware, async (req, r
   let conn;
   try {
     conn = await pool.getConnection();
+    await cursoAbierto(conn, cursoMateriaId, true);
     await conn.query("DELETE FROM profesor_materia WHERE curso_materia_id = ?", [cursoMateriaId]);
     res.json({ success: true });
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ success:false, error:err.message });
     console.error("Error al quitar profesor de la materia:", err);
     res.status(500).json({ success: false, error: "No pudimos quitar al profesor de esta materia." });
   } finally {
@@ -271,6 +281,7 @@ router.post("/curso/:cursoId/alumno", authMiddleware, async (req, res) => {
   try {
     conn = await pool.getConnection();
 
+    await cursoAbierto(conn, cursoId);
     const cursoRows = await conn.query("SELECT id FROM cursos WHERE id = ?", [cursoId]);
     if (!cursoRows || cursoRows.length === 0) {
       return res.status(404).json({ success: false, error: "Ese curso no existe." });
@@ -309,7 +320,7 @@ router.post("/curso/:cursoId/alumno", authMiddleware, async (req, res) => {
     }
 
     await conn.query(
-      "INSERT IGNORE INTO alumno_curso (alumno_id, curso_id) VALUES (?, ?)",
+      "INSERT INTO alumno_curso (alumno_id, curso_id) VALUES (?, ?) ON CONFLICT (alumno_id, curso_id) DO UPDATE SET activo=1",
       [alumnoId, cursoId]
     );
 
@@ -323,6 +334,7 @@ router.post("/curso/:cursoId/alumno", authMiddleware, async (req, res) => {
     });
 
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ success:false, error:err.message });
     if (conn) { try { await conn.rollback(); } catch (_) {} }
     console.error("Error al inscribir alumno:", err);
     res.status(500).json({ success: false, error: "No pudimos agregar el alumno." });
@@ -332,17 +344,14 @@ router.post("/curso/:cursoId/alumno", authMiddleware, async (req, res) => {
 });
 
 // ─── DELETE /usuarios/curso/:cursoId/alumno/:alumnoId ──────────────────────
-// Da de baja al alumno del sistema, TENGA O NO notas cargadas.
-// Nunca se borra la fila de usuarios: se marca activo = 0. Así su historial
-// académico (evaluaciones y notas, que referencian a este mismo id) queda
-// intacto en la base de datos, solo que la cuenta deja de poder iniciar
-// sesión y desaparece de todos los listados activos.
+// Baja de ESTA inscripción, sin borrar otros años. Solo se desactiva la cuenta
+// cuando ya no quedan inscripciones activas en ciclos abiertos.
 
 router.delete("/curso/:cursoId/alumno/:alumnoId", authMiddleware, async (req, res) => {
   if (!soloRegente(req, res)) return;
 
-  const { alumnoId } = req.params;
-  if (!idEnteroValido(alumnoId)) {
+  const { alumnoId, cursoId } = req.params;
+  if (!idEnteroValido(alumnoId) || !idEnteroValido(cursoId)) {
     return res.status(400).json({ success: false, error: "ID de alumno inválido." });
   }
 
@@ -350,22 +359,22 @@ router.delete("/curso/:cursoId/alumno/:alumnoId", authMiddleware, async (req, re
   try {
     conn = await pool.getConnection();
 
-    const rows = await conn.query(
-      "SELECT id FROM usuarios WHERE id = ? AND rango = 'alumno' AND activo = 1",
-      [alumnoId]
-    );
+    await cursoAbierto(conn,cursoId);
+    const rows=await conn.query("SELECT u.id FROM usuarios u JOIN alumno_curso ac ON ac.alumno_id=u.id WHERE u.id=? AND ac.curso_id=? AND ac.activo=1 AND u.rango='alumno'",[alumnoId,cursoId]);
     if (!rows || rows.length === 0) {
       return res.status(404).json({ success: false, error: "No encontramos ese alumno." });
     }
 
     await conn.beginTransaction();
-    await conn.query("UPDATE usuarios SET activo = 0 WHERE id = ?", [alumnoId]);
-    await conn.query("DELETE FROM alumno_curso WHERE alumno_id = ?", [alumnoId]);
+    await conn.query("UPDATE alumno_curso SET activo=0 WHERE alumno_id=? AND curso_id=?",[alumnoId,cursoId]);
+    const otras=await conn.query("SELECT ac.id FROM alumno_curso ac JOIN cursos c ON c.id=ac.curso_id JOIN ciclos_lectivos cl ON cl.anio=c.ciclo_lectivo WHERE ac.alumno_id=? AND ac.activo=1 AND NOT cl.cerrado LIMIT 1",[alumnoId]);
+    if(!otras.length)await conn.query("UPDATE usuarios SET activo=0 WHERE id=?",[alumnoId]);
     await conn.commit();
 
     res.json({ success: true });
 
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ success:false, error:err.message });
     if (conn) { try { await conn.rollback(); } catch (_) {} }
     console.error("Error al dar de baja al alumno:", err);
     res.status(500).json({ success: false, error: "No pudimos dar de baja al alumno." });

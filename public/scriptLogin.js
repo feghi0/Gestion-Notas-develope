@@ -23,6 +23,7 @@ document.getElementById("loginForm").addEventListener("submit", async function (
     }
 
     localStorage.setItem("token", data.token);
+    sessionStorage.removeItem("cicloLectivo");
     localStorage.setItem("id", data.id);
     localStorage.setItem("usuario", data.usuario);
     localStorage.setItem("rango", data.rango);

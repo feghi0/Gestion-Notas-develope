@@ -17,6 +17,7 @@ function escHTML(str) {
 
 async function apiFetch(url, options = {}) {
   const token = localStorage.getItem("token");
+  const cicloAlSolicitar = sessionStorage.getItem("cicloLectivo");
 
   const config = {
     ...options,
@@ -36,6 +37,7 @@ async function apiFetch(url, options = {}) {
       setTimeout(() => { location.href = "index.html"; }, 1200);
       return null;
     }
+    if ((!options.method || options.method === "GET") && cicloAlSolicitar !== sessionStorage.getItem("cicloLectivo")) return null;
     return res;
   } catch (err) {
     console.error("Error de red:", err);

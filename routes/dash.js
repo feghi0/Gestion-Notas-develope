@@ -2,6 +2,7 @@ const express        = require("express");
 const router         = express.Router();
 const pool           = require("../db/connection");
 const authMiddleware = require("../middleware/auth");
+const { obtenerCiclo } = require("../lib/ciclosLectivos");
 
 function idEnteroValido(val) {
   const n = parseInt(val, 10);
@@ -19,18 +20,19 @@ router.get("/:id", authMiddleware, async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
+    const ciclo = await obtenerCiclo(conn, req.query.ciclo);
     let resultado = [];
 
     if (rango === "profesor") {
       // Cursos donde el profesor tiene al menos una materia asignada
       resultado = await conn.query(`
-        SELECT DISTINCT c.id, c.anio, c.division, c.turno
+        SELECT DISTINCT c.id, c.anio, c.division, c.turno, c.ciclo_lectivo
         FROM cursos c
         JOIN curso_materia cm    ON cm.curso_id = c.id
         JOIN profesor_materia pm ON pm.curso_materia_id = cm.id
-        WHERE pm.profesor_id = ?
+        WHERE pm.profesor_id = ? AND c.ciclo_lectivo=?
         ORDER BY c.anio, c.division
-      `, [id]);
+      `, [id, ciclo.anio]);
 
     } else if (rango === "alumno") {
       // El alumno no tiene carpetas: se devuelven directamente sus materias
@@ -38,7 +40,7 @@ router.get("/:id", authMiddleware, async (req, res) => {
         SELECT
           cm.id,
           m.nombre     AS materia,
-          c.anio,
+          c.anio, c.ciclo_lectivo,
           c.division,
           cm.dias,
           cm.horario,
@@ -49,35 +51,35 @@ router.get("/:id", authMiddleware, async (req, res) => {
         JOIN cursos c         ON ac.curso_id  = c.id
         JOIN curso_materia cm ON cm.curso_id  = c.id
         JOIN materias m       ON m.id = cm.materia_id
-        WHERE ac.alumno_id = ?
-        GROUP BY cm.id, m.nombre, c.anio, c.division, cm.dias, cm.horario, u.nombre, u.apellido
+        WHERE ac.alumno_id = ? AND c.ciclo_lectivo=? AND (ac.activo=1 OR EXISTS (SELECT 1 FROM ciclos_lectivos cl WHERE cl.anio=c.ciclo_lectivo AND cl.cerrado))
+        GROUP BY cm.id, m.nombre, c.anio, c.ciclo_lectivo, c.division, cm.dias, cm.horario, u.nombre, u.apellido
         ORDER BY m.nombre
-      `, [id]);
+      `, [id, ciclo.anio]);
 
     } else if (rango === "regente") {
       // El regente ve TODOS los cursos del colegio
       resultado = await conn.query(`
-        SELECT id, anio, division, turno
-        FROM cursos
+        SELECT id, anio, division, turno, ciclo_lectivo
+        FROM cursos WHERE ciclo_lectivo=?
         ORDER BY anio, division
-      `);
+      `, [ciclo.anio]);
 
     } else if (rango === "preceptor") {
       // El preceptor ve los cursos que tiene asignados
       resultado = await conn.query(`
-        SELECT c.id, c.anio, c.division, c.turno
+        SELECT c.id, c.anio, c.division, c.turno, c.ciclo_lectivo
         FROM preceptor_curso pc
         JOIN cursos c ON pc.curso_id = c.id
-        WHERE pc.preceptor_id = ?
+        WHERE pc.preceptor_id = ? AND c.ciclo_lectivo=?
         ORDER BY c.anio, c.division
-      `, [id]);
+      `, [id, ciclo.anio]);
     }
 
     res.json(resultado);
 
   } catch (err) {
     console.error("Error en dashboard:", err);
-    res.status(500).json({ success: false, error: "Error del servidor" });
+    res.status(err.status || 500).json({ success: false, error: "Error del servidor" });
   } finally {
     if (conn) conn.release();
   }
@@ -126,7 +128,7 @@ router.get("/curso/:cursoId", authMiddleware, async (req, res) => {
     }
 
     const curso = await conn.query(
-      "SELECT id, anio, division, turno FROM cursos WHERE id = ?",
+      "SELECT id, anio, division, turno, ciclo_lectivo FROM cursos WHERE id = ?",
       [cursoId]
     );
     if (!curso || curso.length === 0) {
@@ -141,7 +143,7 @@ router.get("/curso/:cursoId", authMiddleware, async (req, res) => {
         SELECT
           cm.id,
           m.nombre AS materia,
-          c.anio,
+          c.anio, c.ciclo_lectivo,
           c.division,
           cm.dias,
           cm.horario
@@ -158,7 +160,7 @@ router.get("/curso/:cursoId", authMiddleware, async (req, res) => {
         SELECT
           cm.id,
           m.nombre     AS materia,
-          c.anio,
+          c.anio, c.ciclo_lectivo,
           c.division,
           cm.dias,
           cm.horario,
@@ -178,7 +180,7 @@ router.get("/curso/:cursoId", authMiddleware, async (req, res) => {
 
   } catch (err) {
     console.error("Error al cargar materias del curso:", err);
-    res.status(500).json({ success: false, error: "Error del servidor" });
+    res.status(err.status || 500).json({ success: false, error: "Error del servidor" });
   } finally {
     if (conn) conn.release();
   }

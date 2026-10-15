@@ -12,6 +12,7 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
   await db.exec(sql);
   await db.exec(fs.readFileSync("supabase/migrations/20261015135414_session_security_note_history.sql", "utf8"));
   await db.exec(fs.readFileSync("supabase/migrations/20261015141030_bulletin_delivery_status.sql", "utf8"));
+  await db.exec(fs.readFileSync("supabase/migrations/20261015155214_academic_years.sql", "utf8"));
   const connection = wrapClient({
     async query(config) {
       const text = typeof config === "string" ? config : config.text;
@@ -165,7 +166,58 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
   assert.equal((await request("/dashboard/2", refreshedTeacher)).status, 401);
   const newLogin = await request("/api/login", null, { dni: "90000002", password: "nueva-para-test" });
   assert.equal(newLogin.status, 200);
-  assert.equal((await request("/dashboard/2", (await newLogin.json()).token)).status, 200);
+  const newTeacherToken=(await newLogin.json()).token;
+  assert.equal((await request("/dashboard/2", newTeacherToken)).status, 200);
   const rls = await db.query("SELECT tablename FROM pg_tables WHERE schemaname='public' AND rowsecurity");
-  assert.equal(rls.rows.length, 11);
+  assert.equal(rls.rows.length, 12);
+  // Dos ciclos con el mismo curso y alumno no comparten inscripciones ni notas.
+  assert.equal((await request("/ciclos", student, { anio:2027, copiarDe:2026 })).status,401);
+  assert.equal((await request("/ciclos", newTeacherToken, { anio:2027 })).status,403);
+  const createYear=await request("/ciclos",admin,{anio:2027,copiarDe:2026});
+  assert.equal(createYear.status,201);
+  assert.equal((await request("/ciclos",admin,{anio:2027})).status,409);
+  const newCourses=(await (await request("/usuarios/cursos?ciclo=2027",admin)).json()).cursos;
+  assert.equal(newCourses.length,1);
+  const newCourse=newCourses[0].id;
+  assert.notEqual(newCourse,1);
+  const newMatter=(await db.query("SELECT id FROM curso_materia WHERE curso_id=$1 ORDER BY id LIMIT 1",[newCourse])).rows[0].id;
+  assert.equal((await db.query("SELECT * FROM alumno_curso WHERE curso_id=$1",[newCourse])).rows.length,0);
+  assert.equal((await db.query("SELECT n.id FROM notas n JOIN evaluaciones e ON e.id=n.evaluacion_id JOIN curso_materia cm ON cm.id=e.curso_materia_id WHERE cm.curso_id=$1",[newCourse])).rows.length,0);
+  assert.equal((await (await request("/dashboard/1?ciclo=2026",admin)).json()).length,1);
+  assert.equal((await (await request("/boletines/cursos?ciclo=2027",admin)).json()).cursos[0].ciclo_lectivo,2027);
+  assert.equal((await request("/usuarios/cursos?ciclo=incorrecto",admin)).status,400);
+  const previousGrades=await db.query("SELECT n.id,n.nota FROM notas n JOIN evaluaciones e ON e.id=n.evaluacion_id WHERE n.alumno_id=5 ORDER BY n.id");
+  assert.equal((await request(`/usuarios/curso/${newCourse}/alumno`,admin,{dni:"90000005",nombre:"Ana",apellido:"Prueba"})).status,200);
+  assert.equal((await request("/usuarios/curso/1/alumno",admin,{dni:"90000005",nombre:"Ana",apellido:"Prueba"})).status,200);
+  const grades={cursoMateriaId:newMatter,tipo:"Examen escrito",descripcion:"Solo 2027",bimestre:1,notas:[{alumnoId:5,nota:10}]};
+  assert.equal((await request("/planilla/evaluacion-global",admin,grades)).status,200);
+  const olderGrades=await db.query("SELECT n.id,n.nota FROM notas n JOIN evaluaciones e ON e.id=n.evaluacion_id WHERE n.alumno_id=5 AND e.curso_materia_id<>$1 ORDER BY n.id",[newMatter]);
+  assert.deepEqual(olderGrades.rows,previousGrades.rows);
+  const newSheet=await (await request(`/planilla/${newMatter}/1`,admin)).json();
+  assert.equal(newSheet.notas.length,1);assert.equal(Number(newSheet.notas[0].nota),10);
+  assert.equal(newSheet.materia.ciclo_lectivo,2027);
+  assert.equal((await request("/ciclos/2027/activar",admin,{})).status,200);
+  assert.equal((await (await request("/dashboard/1",admin)).json())[0].ciclo_lectivo,2027);
+  // La baja en un curso no borra el anterior ni desactiva al alumno de otro año abierto.
+  assert.equal((await request("/usuarios/curso/1/alumno/5",admin,undefined,"DELETE")).status,200);
+  assert.equal((await db.query("SELECT activo FROM usuarios WHERE id=5")).rows[0].activo,1);
+  assert.equal((await db.query("SELECT * FROM alumno_curso WHERE alumno_id=5")).rows.length,2);
+  assert.equal((await request("/ciclos/2026/cerrar",admin,{})).status,200);
+  assert.equal((await request("/planilla/evaluacion-global",admin,{...grades,cursoMateriaId:1})).status,423);
+  assert.equal((await request("/usuarios/curso/1/alumno/5",admin,undefined,"DELETE")).status,423);
+  assert.equal((await request("/usuarios/materia/1/profesor",admin,{dni:"90000002",nombre:"Docente",apellido:"Demo"})).status,423);
+  await assert.rejects(db.query("UPDATE notas SET nota=1 WHERE evaluacion_id IN (SELECT id FROM evaluaciones WHERE curso_materia_id=1)"),/cerrado/);
+  await assert.rejects(db.query("UPDATE cursos SET ciclo_lectivo=2026 WHERE id=$1",[newCourse]),/trasladar/);
+  const archive=await (await request("/planilla/1/1",admin)).json();
+  assert.equal(archive.cicloCerrado,true);
+  assert.ok(archive.alumnos.some(row=>row.id===5));
+  const currentStudent=jwt.sign({id:5,sessionVersion:(await db.query("SELECT session_version FROM usuarios WHERE id=5")).rows[0].session_version},process.env.JWT_SECRET);
+  const personalArchive=await (await request("/planilla/1/5",currentStudent)).json();
+  assert.equal(personalArchive.alumnos.length,1);
+  assert.ok(personalArchive.notas.every(row=>row.alumno_id===5));
+  assert.equal((await request("/ciclos",currentStudent,{anio:2029})).status,403);
+  const zip=await request("/boletines/generar/1?enviarMails=false",admin);
+  assert.equal(zip.status,200);assert.ok(zip.headers.get("content-disposition").includes("2026"));await zip.arrayBuffer();
+  assert.equal((await request("/ciclos/2026/activar",admin,{})).status,409);
+  assert.equal((await request("/ciclos/2026/reabrir",admin,{})).status,200);
 });

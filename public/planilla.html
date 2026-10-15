@@ -5,6 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Planilla</title>
+  <link rel="stylesheet" href="styleHistorial.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -304,10 +305,13 @@
     <p>ET N°35 Ingeniero Eduardo Latzina</p>
     <span id="materiaInfo"></span>
   </div>
+  <div class="acciones-planilla">
+  <button class="volver-btn" id="historialBtn" type="button" hidden>Historial de notas</button>
   <button class="volver-btn" onclick="history.back()">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
     Volver
   </button>
+  </div>
 </div>
 
 <div class="container">
@@ -391,6 +395,7 @@
 
 <script src="api.js"></script>
 <script src="scriptPlanilla.js"></script>
+<script src="scriptHistorial.js"></script>
 
 </body>
 </html>

@@ -1186,6 +1186,41 @@ router.patch("/cierre-tema", authMiddleware, async (req, res) => {
 
 // ─── GET planilla ─────────────────────────────────────────────────────────────
 
+// Historial disponible solo para regentes y profesores asignados a la materia.
+router.get("/historial/:cursoMateriaId", authMiddleware, async (req, res) => {
+  const { cursoMateriaId } = req.params;
+  if (!["regente", "profesor"].includes(req.user.rango)) {
+    return res.status(403).json({ success: false, error: "Sin permisos para consultar el historial" });
+  }
+  if (!/^[1-9]\d*$/.test(cursoMateriaId)) {
+    return res.status(400).json({ success: false, error: "Materia inválida" });
+  }
+  const before = req.query.antes;
+  const alumno = req.query.alumno;
+  if ((before !== undefined && !/^[1-9]\d*$/.test(before)) || (alumno !== undefined && !/^[1-9]\d*$/.test(alumno))) {
+    return res.status(400).json({ success: false, error: "Filtro inválido" });
+  }
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const acceso = await verificarAcceso(conn, cursoMateriaId, req.user, false);
+    if (!acceso.ok) return res.status(acceso.status).json({ success: false, error: acceso.error });
+    let sql = "SELECT * FROM historial_notas WHERE curso_materia_id = ?";
+    const values = [cursoMateriaId];
+    if (before) { sql += " AND id < ?"; values.push(before); }
+    if (alumno) { sql += " AND alumno_id = ?"; values.push(alumno); }
+    sql += " ORDER BY id DESC LIMIT 51";
+    const rows = await conn.query(sql, values);
+    const historial = rows.slice(0, 50);
+    res.json({ success: true, historial, siguiente: rows.length > 50 ? String(historial.at(-1).id) : null });
+  } catch (err) {
+    console.error("Error al consultar historial:", err.code);
+    res.status(500).json({ success: false, error: "No pudimos consultar el historial" });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
 router.get("/:cursoMateriaId/:usuarioId", authMiddleware, async (req, res) => {
   const { cursoMateriaId } = req.params;
   const user = req.user;

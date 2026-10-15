@@ -1,4 +1,5 @@
 const { Pool, types } = require("pg");
+const requestContext = require("../lib/requestContext");
 
 // Las notas DECIMAL y las fechas deben conservar el formato usado por la app.
 types.setTypeParser(1700, Number);
@@ -41,7 +42,16 @@ function wrapClient(client) {
       for (const row of rows) results.push(await this.query(sql, row));
       return results;
     },
-    async beginTransaction() { await client.query("BEGIN"); inTransaction = true; },
+    async beginTransaction() {
+      await client.query("BEGIN");
+      inTransaction = true;
+      const context = requestContext.getStore();
+      // LOCAL: el pooler no conserva el autor al terminar la transacción.
+      await client.query({
+        text: "SELECT set_config('app.actor_id', $1, true), set_config('app.audit_source', $2, true)",
+        values: [context ? String(context.actorId) : "", context?.source || "sistema"]
+      });
+    },
     async commit() { await client.query("COMMIT"); inTransaction = false; },
     async rollback() { await client.query("ROLLBACK"); inTransaction = false; },
     // Descartar una conexión con transacción abierta evita contaminar el pool.

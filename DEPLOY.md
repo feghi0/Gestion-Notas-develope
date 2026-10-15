@@ -23,7 +23,7 @@ esa URI sin parámetros SSL que sobrescriban la validación del driver. Se añad
 
 El asesor de Supabase solo mostró el aviso informativo
 [RLS sin políticas](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)
-en las nueve tablas: es intencional, porque no hay acceso desde la API pública
+en las tablas de la aplicación: es intencional, porque no hay acceso desde la API pública
 de Supabase; las consultas pasan por el servidor Express autenticado.
 
 ## Base nueva
@@ -84,7 +84,36 @@ Para desplegar cada commit automáticamente, la cuenta que conecta GitHub en
 Vercel necesita permisos de escritura o administración sobre el repositorio.
 El despliegue por CLI funciona independientemente de esa conexión.
 
-## Verificación local
+## Sesiones e historial de notas
+
+Aplicar `supabase/migrations/20261015135414_session_security_note_history.sql`
+antes de desplegar la versión que valida `session_version`.
+Estas mejoras requieren PostgreSQL; la instalación MariaDB original necesita
+una migración equivalente antes de usar esta versión.
+
+Cada petición autenticada consulta el estado actual del usuario. Una baja,
+reactivación, cambio de contraseña, rol o permiso incrementa `session_version`
+y revoca los tokens previos. Los tokens anteriores sin versión solo se admiten
+mientras el usuario conserve la versión 0. Una base no disponible responde 503
+y no autoriza el acceso. Una petición que ya estaba ejecutándose puede terminar.
+
+El botón **Historial de notas** de la planilla permite consultar los eventos
+de una materia, filtrar por alumno y cargar páginas de 50 registros. Solo los
+regentes y profesores actualmente asignados tienen acceso.
+Los triggers registran altas, modificaciones, eliminaciones y cascadas, con
+nota anterior y nueva, autor, fecha, alumno e instantánea de la evaluación.
+Las notas previas se identifican como estado inicial con autor desconocido.
+No se reconstruyen modificaciones anteriores a la habilitación del historial.
+
+El autor se transmite desde el middleware mediante AsyncLocalStorage y
+`set_config(..., true)` al iniciar cada transacción; no persiste en conexiones
+reutilizadas. Las escrituras en `notas` deben usar `beginTransaction()` para
+atribuir el autor. Cambios directos desde SQL se registran como sistema.
+El historial tiene RLS sin acceso desde claves públicas y rechaza UPDATE,
+DELETE y TRUNCATE. Un administrador de base de datos con privilegios suficientes
+todavía puede alterar o quitar esa protección; no es un registro externo inviolable.
+
+### Verificación local
 
 Las pruebas ejecutan el esquema y los endpoints contra PostgreSQL embebido
 (PGlite), incluyendo login de todos los roles, permisos, inserciones, rollback,

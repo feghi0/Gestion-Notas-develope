@@ -55,7 +55,7 @@ router.post("/login", loginLimiter, async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: usuario.id, rango: usuario.rango, permiso: usuario.permiso },
+      { id: usuario.id, rango: usuario.rango, permiso: usuario.permiso, sessionVersion: Number(usuario.session_version) },
       process.env.JWT_SECRET,
       { expiresIn: "8h" }
     );

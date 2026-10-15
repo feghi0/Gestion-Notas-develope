@@ -6,3 +6,4 @@ node_modules/
 .local/
 .agents/
 skills-lock.json
+supabase/.temp/

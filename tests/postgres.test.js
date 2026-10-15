@@ -27,3 +27,22 @@ test("una transacción abierta descarta su conexión al liberarla", async () => 
   conn.release();
   assert.equal(discarded, false);
 });
+
+test("peticiones simultáneas no comparten el responsable de auditoría", async () => {
+  const context = require("../lib/requestContext");
+  const authors = [];
+  const makeConnection = () => wrapClient({
+    async query(query) {
+      await new Promise(resolve => setImmediate(resolve));
+      if (query.values) authors.push(query.values);
+      return {};
+    }, release() {}
+  });
+  await Promise.all([11, 22].map(actorId => context.run({ actorId, source: `test-${actorId}` }, async () => {
+    const conn = makeConnection();
+    await conn.beginTransaction();
+    await conn.commit();
+    conn.release();
+  })));
+  assert.deepEqual(authors.sort(), [["11", "test-11"], ["22", "test-22"]]);
+});

@@ -47,7 +47,7 @@ async function mostrarCursos() {
     vista.innerHTML = `<div class="grid-cursos">${data.cursos.map(c => `
       <div class="curso-card" data-id="${c.id}">
         <h3>${escHTML(c.anio)}° ${escHTML(c.division)}</h3>
-        <p>Turno ${escHTML(c.turno)}</p>
+        <p>Turno ${escHTML(formatearTurno(c.turno))}</p>
       </div>
     `).join("")}</div>`;
 

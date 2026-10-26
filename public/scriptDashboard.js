@@ -69,7 +69,7 @@ async function cargarCursos() {
           <span class="curso-nombre">${escHTML(curso.anio)}° ${escHTML(curso.division)}</span>
         </div>
         <div class="card-body">
-          <p><strong>Turno</strong> ${escHTML(curso.turno)}</p>
+          <p><strong>Turno</strong> ${escHTML(formatearTurno(curso.turno))}</p>
           ${curso.es_testing ? '<p><strong>Testing</strong> · Datos ficticios</p>' : ''}
           ${['regente', 'preceptor'].includes(rango) ? `<p><a class="estadisticas-curso" href="estadisticas.html?curso=${Number(curso.id)}">Ver estadísticas</a></p>` : ''}
         </div>

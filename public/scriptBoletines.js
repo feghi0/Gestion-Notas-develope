@@ -35,7 +35,7 @@ async function cargarCursos() {
     for (const curso of data.cursos) {
       const opt = document.createElement("option");
       opt.value = curso.id;
-      opt.textContent = `${curso.anio}° ${curso.division} (${capitalizar(
+      opt.textContent = `${curso.anio}° ${curso.division} (${formatearTurno(
         curso.turno
       )})`;
       select.appendChild(opt);

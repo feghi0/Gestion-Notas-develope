@@ -14,7 +14,7 @@ async function cargarCursosEstadisticas() {
   try {
     const data = await datos('/estadisticas/cursos' + cicloQuery()); if (turno !== solicitud) return;
     cursoSelect.replaceChildren(new Option('Seleccioná un curso', ''));
-    for (const c of data.cursos) cursoSelect.add(new Option(`${c.anio}° ${c.division} · ${c.turno === 'manana' ? 'Mañana' : c.turno}${c.es_testing ? ' · Testing' : ''}`, c.id));
+    for (const c of data.cursos) cursoSelect.add(new Option(`${c.anio}° ${c.division} · ${formatearTurno(c.turno)}${c.es_testing ? ' · Testing' : ''}`, c.id));
     estado.textContent = data.cursos.length ? 'Elegí un curso para ver sus indicadores.' : 'No tenés cursos disponibles en este ciclo.';
     const solicitado = new URLSearchParams(location.search).get('curso');
     if (solicitado && data.cursos.some(c => String(c.id) === solicitado)) { cursoSelect.value = solicitado; await cargarEstadisticas(); }

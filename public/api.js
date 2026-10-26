@@ -3,6 +3,11 @@
 
 // ─── Sanitización XSS ───────────────────────────────────────────────────────
 
+function formatearTurno(turno) {
+  const valor = String(turno || '').trim();
+  return { manana: 'Mañana', tarde: 'Tarde', noche: 'Noche' }[valor.toLowerCase()] || valor;
+}
+
 function escHTML(str) {
   if (str === null || str === undefined) return "";
   return String(str)

@@ -13,6 +13,7 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
   await db.exec(fs.readFileSync("supabase/migrations/20261015135414_session_security_note_history.sql", "utf8"));
   await db.exec(fs.readFileSync("supabase/migrations/20261015141030_bulletin_delivery_status.sql", "utf8"));
   await db.exec(fs.readFileSync("supabase/migrations/20261015155214_academic_years.sql", "utf8"));
+  await db.exec(fs.readFileSync("supabase/migrations/20261026021850_automatic_academic_year.sql", "utf8"));
   const connection = wrapClient({
     async query(config) {
       const text = typeof config === "string" ? config : config.text;

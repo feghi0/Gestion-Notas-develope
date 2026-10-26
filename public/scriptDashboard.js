@@ -68,12 +68,15 @@ async function cargarCursos() {
         </div>
         <div class="card-body">
           <p><strong>Turno</strong> ${escHTML(curso.turno)}</p>
+          ${curso.es_testing ? '<p><strong>Testing</strong> · Datos ficticios</p>' : ''}
+          ${['regente', 'preceptor'].includes(rango) ? `<p><a class="estadisticas-curso" href="estadisticas.html?curso=${Number(curso.id)}">Ver estadísticas</a></p>` : ''}
         </div>
       `;
 
       card.addEventListener("click", function () {
         cargarMateriasDeCurso(curso.id, `${curso.anio}° ${curso.division}`);
       });
+      card.querySelector('.estadisticas-curso')?.addEventListener('click', event => event.stopPropagation());
 
       grid.appendChild(card);
     }

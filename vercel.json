@@ -2,6 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "express",
   "regions": ["gru1"],
+  "crons": [{ "path": "/api/cron/ciclo-lectivo", "schedule": "0 6 * * *" }],
   "functions": {
     "server.js": { "maxDuration": 300 }
   },

@@ -3,7 +3,7 @@
 <title>Ciclos lectivos</title><link rel="stylesheet" href="styleBoletines.css"></head><body>
 <div class="header"><div><h1>Ciclos lectivos</h1><p>ET N°35 · Administración por año escolar</p></div><a class="volver-btn" href="dashboard.html">Volver</a></div>
 <main class="container"><section class="card">
-<h2>Crear un ciclo lectivo</h2><p class="subtitulo">Copiá cursos y materias para preparar el nuevo año. Los alumnos, profesores, preceptores y notas se asignan por separado.</p>
+<h2>Ciclos lectivos automáticos</h2><p class="subtitulo">Cada 15 de febrero se prepara el ciclo del año y se establece como actual. Se copian cursos y materias del ciclo anterior, sin alumnos, docentes, preceptores ni notas. Los cursos de testing no se copian y los años anteriores no se cierran automáticamente. Si necesitás anticiparte, podés crear un ciclo manualmente.</p>
 <form id="crearCiclo"><div class="form-group"><label for="nuevoAnio">Año</label><input id="nuevoAnio" type="number" min="2000" max="2100" required style="padding:12px;width:100%"></div>
 <div class="form-group"><label for="copiarCiclo">Copiar cursos y materias de</label><select id="copiarCiclo"><option value="">Sin copiar cursos</option></select></div>
 <button class="generar-btn" type="submit">Crear ciclo</button></form><p id="estadoCiclos" class="estado" role="status" aria-live="polite"></p>

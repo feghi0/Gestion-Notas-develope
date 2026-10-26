@@ -9,6 +9,9 @@ const ciclosReady = (async () => {
   bar.style.cssText = "display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:0 0 24px;padding:16px;background:white;border:1px solid #ddd;border-radius:12px;color:#222";
   bar.innerHTML = '<label for="selectCicloLectivo">Ciclo lectivo</label><select id="selectCicloLectivo" style="padding:8px;border:1px solid #ccc;border-radius:8px"></select><span id="estadoCiclo"></span>';
   host.prepend(bar);
+  if (['regente', 'preceptor'].includes(localStorage.getItem('rango'))) {
+    const estadisticasLink = document.createElement('a'); estadisticasLink.href='estadisticas.html';estadisticasLink.textContent='Estadísticas';bar.appendChild(estadisticasLink);
+  }
   if (localStorage.getItem("rango") === "regente") {
     const link = document.createElement("a"); link.href="ciclos.html";link.textContent="Administrar ciclos";bar.appendChild(link);
     const cursosLink = document.createElement("a"); cursosLink.href="estructura.html";cursosLink.textContent="Cursos y materias";bar.appendChild(cursosLink);

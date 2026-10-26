@@ -2,10 +2,12 @@ const router = require("express").Router();
 const pool = require("../db/connection");
 const auth = require("../middleware/auth");
 const { obtenerCiclo } = require("../lib/ciclosLectivos");
+const { asegurarCicloAutomatico } = require("../lib/aperturaCiclo");
 router.use(auth);
 router.get("/", async (req,res) => {
   let conn;
   try {
+    await asegurarCicloAutomatico();
     conn=await pool.getConnection();
     const ciclos=await conn.query("SELECT anio, activo, cerrado FROM ciclos_lectivos ORDER BY anio DESC");
     res.json({success:true,ciclos});
@@ -28,7 +30,7 @@ router.post("/", async (req,res) => {
     await conn.query("INSERT INTO ciclos_lectivos (anio) VALUES (?)",[anio]);
     let copiados=0;
     if(copiarDe!==undefined) {
-      const cursos=await conn.query("SELECT id,anio,division,turno FROM cursos WHERE ciclo_lectivo=? ORDER BY id",[copiarDe]);
+      const cursos=await conn.query("SELECT id,anio,division,turno FROM cursos WHERE ciclo_lectivo=? AND es_testing=false ORDER BY id",[copiarDe]);
       for(const curso of cursos) {
         const result=await conn.query("INSERT INTO cursos (anio,division,turno,ciclo_lectivo) VALUES (?,?,?,?)",[curso.anio,curso.division,curso.turno,anio]);
         await conn.query(`INSERT INTO curso_materia (curso_id,materia_id,dias,horario)

@@ -26,7 +26,7 @@ router.get("/:id", authMiddleware, async (req, res) => {
     if (rango === "profesor") {
       // Cursos donde el profesor tiene al menos una materia asignada
       resultado = await conn.query(`
-        SELECT DISTINCT c.id, c.anio, c.division, c.turno, c.ciclo_lectivo
+        SELECT DISTINCT c.id, c.anio, c.division, c.turno, c.ciclo_lectivo, c.es_testing
         FROM cursos c
         JOIN curso_materia cm    ON cm.curso_id = c.id
         JOIN profesor_materia pm ON pm.curso_materia_id = cm.id
@@ -59,7 +59,7 @@ router.get("/:id", authMiddleware, async (req, res) => {
     } else if (rango === "regente") {
       // El regente ve TODOS los cursos del colegio
       resultado = await conn.query(`
-        SELECT id, anio, division, turno, ciclo_lectivo
+        SELECT id, anio, division, turno, ciclo_lectivo, es_testing
         FROM cursos WHERE ciclo_lectivo=?
         ORDER BY anio, division
       `, [ciclo.anio]);
@@ -67,7 +67,7 @@ router.get("/:id", authMiddleware, async (req, res) => {
     } else if (rango === "preceptor") {
       // El preceptor ve los cursos que tiene asignados
       resultado = await conn.query(`
-        SELECT c.id, c.anio, c.division, c.turno, c.ciclo_lectivo
+        SELECT c.id, c.anio, c.division, c.turno, c.ciclo_lectivo, c.es_testing
         FROM preceptor_curso pc
         JOIN cursos c ON pc.curso_id = c.id
         WHERE pc.preceptor_id = ? AND c.ciclo_lectivo=?

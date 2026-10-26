@@ -201,3 +201,48 @@ aleatoria, que debe cambiarse al ingresar. Crear una cuenta no la asigna: despu�
 hay que seleccionarla en el curso o materia. Quitar una asignación conserva la
 cuenta. Los profesores nuevos tienen escritura y los preceptores solo lectura.
 Las cuentas inactivas no se reactivan automáticamente desde este panel.
+
+## Estadísticas académicas
+
+`estadisticas.html` está disponible para regentes y preceptores desde el selector
+de ciclo y desde cada tarjeta de curso. Los preceptores solo pueden consultar
+cursos asignados; la API comprueba la asignación antes de devolver alumnos o notas.
+Permite elegir bimestre, cuatrimestre o situación general y muestra barras por
+materia, porcentajes, cobertura de carga y seguimiento individual. Usa la misma
+lógica de cálculo que los boletines. Las materias sin información no se cuentan
+como desaprobadas. El porcentaje de aprobación usa las materias por alumno con
+información como denominador; la cobertura usa todas las materias por alumno.
+Los resultados con períodos incompletos son orientativos, no una promoción final.
+
+## Apertura anual automática
+
+Aplicar `supabase/migrations/20261026021850_automatic_academic_year.sql` antes
+del despliegue. Configurar `CRON_SECRET` como variable sensible de producción
+en Vercel. La tarea protegida `/api/cron/ciclo-lectivo` se ejecuta diariamente a
+las 06:00 UTC; la fecha se interpreta en Buenos Aires. A partir del 15 de febrero
+prepara una única vez el ciclo del año y lo establece como actual, sin desplazar
+un ciclo futuro que el regente haya activado explícitamente. El plan Hobby puede
+ejecutar dentro de la hora programada, por lo que no se promete un minuto exacto.
+
+La consulta autenticada `/ciclos` realiza la misma comprobación como respaldo.
+La transacción y el bloqueo compartido con la creación manual evitan duplicados.
+Se copian cursos y materias del último ciclo anterior, sin sobrescribir la
+estructura existente ni copiar notas, alumnos o personal. Los cursos marcados
+`es_testing` no se copian. Los ciclos anteriores no se cierran automáticamente.
+Un ciclo cerrado no se reabre. La marca `apertura_automatica_en` impide que
+ejecuciones posteriores reviertan decisiones manuales del regente.
+
+Referencia: [configuración y protección de Vercel Cron](https://vercel.com/docs/cron-jobs/manage-cron-jobs).
+
+## Curso ficticio 6.º 2
+
+`node scripts/seed-curso-testing.js --apply` completa de forma idempotente el
+6.º 2 mañana de 2026 en el proyecto configurado. Reutiliza el curso vacío,
+comprueba conflictos de DNI y no admite convertir cursos con otras cuentas en
+testing. Crea 30 alumnos, nueve profesores y un preceptor con `hola1234`, sin
+cambio obligatorio inicial. Los correos quedan vacíos. Las materias y notas
+están identificadas como ficticias y no se envían boletines automáticamente.
+Al reejecutar no se sobrescriben notas ni contraseñas ya modificadas.
+El archivo local ignorado `.local/cuentas-testing-6-2-2026.csv` contiene los
+accesos iniciales. Las notas variadas sirven para explorar las estadísticas;
+incluyen alumnos con aprobación, seguimiento y sin información.

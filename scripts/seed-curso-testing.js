@@ -8,9 +8,9 @@ const { cursoAbierto } = require('../lib/ciclosLectivos');
 const MATERIAS = ['Programación Sobre Redes', 'Administración de Sistemas y Redes', 'Desarrollo de Sistemas', 'Gestión de los Procesos Productivos', 'Matemática', 'Ciudadanía y Trabajo', 'Ciencia y Tecnología', 'Inglés', 'Prácticas Profesionalizantes'];
 const anio = 2026;
 const personas = [
-  ...Array.from({ length: 30 }, (_, i) => ({ dni: String(99062001 + i), nombre: `Alumno ${String(i + 1).padStart(2, '0')}`, apellido: 'Testing 6º2', rango: 'alumno', detalle: '' })),
-  ...MATERIAS.map((materia, i) => ({ dni: String(99062901 + i), nombre: `Profesor ${String(i + 1).padStart(2, '0')}`, apellido: 'Testing 6º2', rango: 'profesor', detalle: materia })),
-  { dni: '99062999', nombre: 'Preceptor', apellido: 'Testing 6º2', rango: 'preceptor', detalle: '6º2 mañana' }
+  ...Array.from({ length: 30 }, (_, i) => ({ dni: String(91000000 + i), nombre: `Alumno ${String(i + 1).padStart(2, '0')}`, apellido: 'Testing 6º2', rango: 'alumno', detalle: '' })),
+  ...MATERIAS.map((materia, i) => ({ dni: String(92000000 + i), nombre: `Profesor ${String(i + 1).padStart(2, '0')}`, apellido: 'Testing 6º2', rango: 'profesor', detalle: materia })),
+  { dni: '93000000', nombre: 'Preceptor', apellido: 'Testing 6º2', rango: 'preceptor', detalle: '6º2 mañana' }
 ];
 async function ejecutar() {
   if (!process.argv.includes('--apply')) { console.log('Para cargar el curso ficticio 6º2 mañana / 2026: node scripts/seed-curso-testing.js --apply'); return; }

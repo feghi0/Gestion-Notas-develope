@@ -246,3 +246,7 @@ Al reejecutar no se sobrescriben notas ni contraseñas ya modificadas.
 El archivo local ignorado `.local/cuentas-testing-6-2-2026.csv` contiene los
 accesos iniciales. Las notas variadas sirven para explorar las estadísticas;
 incluyen alumnos con aprobación, seguimiento y sin información.
+Los DNI ficticios son de ocho cifras: alumnos desde `91000000`, profesores
+desde `92000000` y preceptores desde `93000000`, aumentando de uno en uno.
+Para este curso se usan alumnos `91000000` a `91000029`, profesores `92000000`
+a `92000008` y preceptor `93000000`. El usuario de acceso coincide con el DNI.

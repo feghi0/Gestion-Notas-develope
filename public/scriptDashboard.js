@@ -4,11 +4,11 @@ const usuario = localStorage.getItem("usuario");
 const rango   = localStorage.getItem("rango");
 
 const colores = [
-  "linear-gradient(135deg, #2563eb, #1d4ed8)",
-  "linear-gradient(135deg, #db2777, #be185d)",
-  "linear-gradient(135deg, #16a34a, #15803d)",
+  "linear-gradient(135deg, #c5221f, #991b1b)",
+  "linear-gradient(135deg, #1e293b, #0f172a)",
   "linear-gradient(135deg, #d97706, #b45309)",
-  "linear-gradient(135deg, #7c3aed, #6d28d9)",
+  "linear-gradient(135deg, #15803d, #166534)",
+  "linear-gradient(135deg, #1d4ed8, #1e40af)",
 ];
 
 const USA_CARPETAS = ["profesor", "preceptor", "regente"];
@@ -18,6 +18,8 @@ if (!id || !localStorage.getItem("token")) {
 }
 
 document.getElementById("userInfo").textContent = usuario;
+const avatar = document.getElementById("userAvatar");
+if (avatar) avatar.textContent = (usuario || "U").charAt(0).toUpperCase();
 
 if (rango === "regente") {
   const btn = document.getElementById("boletinesBtn");

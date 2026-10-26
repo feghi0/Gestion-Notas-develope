@@ -6,8 +6,8 @@ const ciclosReady = (async () => {
   const host = document.getElementById("container") || document.querySelector(".container");
   if (!host) return;
   const bar = document.createElement("div");
-  bar.style.cssText = "display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:0 0 24px;padding:16px;background:white;border:1px solid #ddd;border-radius:12px;color:#222";
-  bar.innerHTML = '<label for="selectCicloLectivo">Ciclo lectivo</label><select id="selectCicloLectivo" style="padding:8px;border:1px solid #ccc;border-radius:8px"></select><span id="estadoCiclo"></span>';
+  bar.className = 'ciclo-toolbar';
+  bar.innerHTML = '<label for="selectCicloLectivo">Ciclo lectivo</label><select id="selectCicloLectivo"></select><span id="estadoCiclo"></span>';
   host.prepend(bar);
   if (['regente', 'preceptor'].includes(localStorage.getItem('rango'))) {
     const estadisticasLink = document.createElement('a'); estadisticasLink.href='estadisticas.html';estadisticasLink.textContent='Estadísticas';bar.appendChild(estadisticasLink);

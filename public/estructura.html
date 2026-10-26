@@ -3,8 +3,10 @@
 <title>Cursos y materias</title><link rel="stylesheet" href="styleBoletines.css">
 <style>
 .estructura-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:16px}.estructura-form{display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin:16px 0}.estructura-form label{display:grid;gap:6px;flex:1;min-width:130px}.estructura-form input,.estructura-form select{padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;font:inherit}.estructura-form button,.estructura-item button{padding:10px 16px;border:1px solid #ccc;border-radius:8px;cursor:pointer;background:white;color:#222}.estructura-item{border:1px solid #ddd;border-radius:12px;padding:16px;margin:12px 0;overflow-wrap:anywhere}.estructura-item h3{margin-bottom:10px}.estructura-form button:disabled{opacity:.5;cursor:default}#aviso{white-space:pre-line;margin:16px 0}#detalle[hidden]{display:none}details{margin:20px 0}summary{cursor:pointer;font-weight:600}#listaCursos button{width:100%;text-align:left}#detalle .card{max-width:none}#aviso:empty{display:none}
-</style></head><body>
-<header class="header"><div><h1>Cursos y materias</h1><p>ET N°35 · Organización escolar</p></div><a href="usuarios.html" class="volver-btn">Usuarios</a></header>
+</style><link rel="icon" href="img/logo.jpg" type="image/jpeg">
+<link rel="stylesheet" href="styleInstitucional.css">
+</head><body>
+<header class="header"><div class="header-brand"><img src="img/logo.jpg" alt="Escudo de ET N°35" class="header-logo-img"><div class="header-brand-text"><h1>Cursos y materias</h1><p>ET N°35 · Organización escolar</p></div></div><a href="usuarios.html" class="volver-btn">Usuarios</a></header>
 <main class="container"><p id="aviso" role="status" aria-live="polite"></p>
 <section class="card envios-card"><h2>Cursos del ciclo</h2><div id="listaCursos" class="estructura-grid"></div>
 <details id="nuevoCurso"><summary>Crear curso</summary><form id="formCurso" class="estructura-form">

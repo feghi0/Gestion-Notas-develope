@@ -7,22 +7,38 @@
   <link rel="stylesheet" href="styleDashboard.css">
   <title>Dashboard</title>
 
+<link rel="icon" href="img/logo.jpg" type="image/jpeg">
+<link rel="stylesheet" href="styleInstitucional.css">
 </head>
 
 <body>
 
 <div class="header">
-  <button class="volver-btn" id="boletinesBtn" style="display:none;" onclick="location.href='boletines.html'">
-  📄 Generar Boletines
-</button>
-<button class="header-btn" id="usuariosBtn" style="display:none;" onclick="location.href='usuarios.html'">
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-  <span>Usuarios</span>
-</button>
-  <div id="userInfo" class="user-info"></div>
-  <div class="logo">
-    <h1>ET N°35</h1>
-    <p>Ingeniero Eduardo Latzina</p>
+  <div class="header-brand">
+    <img src="img/logo.jpg" alt="Logo oficial ET N°35" class="header-logo-img">
+    <div class="header-brand-text">
+      <h1>ET N°35</h1>
+      <p>Escuela Técnica N° 35 &bull; Ing. Eduardo Latzina</p>
+    </div>
+  </div>
+
+  <div class="header-actions">
+    <button class="header-btn" id="boletinesBtn" style="display:none;" onclick="location.href='boletines.html'">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/></svg>
+      <span>Generar Boletines</span>
+    </button>
+    <button class="header-btn" id="usuariosBtn" style="display:none;" onclick="location.href='usuarios.html'">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      <span>Usuarios</span>
+    </button>
+    <div class="user-pill">
+      <div class="user-avatar" id="userAvatar">U</div>
+      <div id="userInfo" class="user-info"></div>
+    </div>
+    <button class="header-btn header-btn-logout" onclick="localStorage.clear(); location.href='index.html';" title="Cerrar sesión" aria-label="Cerrar sesión">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+      <span>Salir</span>
+    </button>
   </div>
 </div>
 

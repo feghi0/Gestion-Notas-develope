@@ -250,3 +250,13 @@ Los DNI ficticios son de ocho cifras: alumnos desde `91000000`, profesores
 desde `92000000` y preceptores desde `93000000`, aumentando de uno en uno.
 Para este curso se usan alumnos `91000000` a `91000029`, profesores `92000000`
 a `92000008` y preceptor `93000000`. El usuario de acceso coincide con el DNI.
+
+## Diseño institucional de Natu
+
+La presentación incorpora la paleta, escudo y estilos del archivo de referencia
+`Gestion-de-Notas-Natu.zip`: rojo carmín, azul oscuro y acentos dorados. Se
+importaron únicamente las hojas de estilo y el escudo; las rutas, consultas,
+permisos y funciones pertenecen a la versión actual. `styleInstitucional.css`
+extiende ese diseño a ciclos, estadísticas, estructura escolar, historial y
+seguimiento de boletines. La planilla usa ahora `stylePlanilla.css` externo.
+Los nuevos estilos no requieren migraciones ni cambios en Supabase.

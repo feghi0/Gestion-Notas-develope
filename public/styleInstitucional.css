@@ -1,0 +1,97 @@
+/* Adaptación del diseño de Natu a las funciones de la versión actual. */
+
+a { color: var(--brand-primary-dark); text-underline-offset: 3px; }
+a:hover { color: var(--brand-primary); }
+button, input, select, textarea { font-family: inherit; }
+button:disabled { cursor: not-allowed; }
+input[type="checkbox"] { accent-color: var(--brand-primary); }
+[hidden] { display: none !important; }
+
+.header .header-brand { min-width: 0; }
+.header .header-brand-text { min-width: 0; }
+.header a { text-decoration: none; }
+.header a.volver-btn, .header a.header-btn { color: white; }
+.header a.volver-btn:hover, .header a.header-btn:hover { color: white; }
+.header .header-logo-img { flex-shrink: 0; }
+.header a.volver-btn { white-space: nowrap; }
+.nav-bar .volver-dashboard-btn {
+  color: var(--brand-primary-dark);
+  background: var(--brand-primary-soft);
+  border-color: var(--brand-primary-border);
+  text-decoration: none;
+}
+.nav-bar .volver-dashboard-btn:hover { background: var(--brand-primary-border); }
+
+.ciclo-toolbar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
+  margin: 0 0 24px; padding: 16px 20px;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-left: 4px solid var(--brand-primary);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-xs);
+  font-size: 13px;
+}
+.ciclo-toolbar label { font-weight: 700; }
+.ciclo-toolbar select { padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font: inherit; }
+.ciclo-toolbar a { font-weight: 600; }
+#estadoCiclo { color: var(--text-muted); }
+
+.estructura-item, .indicador, .estadisticas-panel {
+  background: var(--surface); border-color: var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-xs);
+}
+.estructura-form input, .estructura-form select, .filtros-estadisticas select,
+.historial-dialog select, .historial-dialog button {
+  color: var(--text); background-color: var(--surface);
+  border-color: var(--border-strong); border-radius: var(--radius-sm);
+}
+.estructura-form button[type="submit"], .estructura-form button:not([type]),
+.envios-card .generar-btn, .envios-card #crearCiclo button {
+  color: white; background: var(--brand-primary); border-color: var(--brand-primary);
+  font-weight: 600;
+}
+.estructura-form button[type="submit"]:hover, .estructura-form button:not([type]):hover,
+.envios-card .generar-btn:hover { background: var(--brand-primary-hover); }
+.estructura-form button:disabled, .envios-card .generar-btn:disabled { opacity: .55; }
+#listaCursos .estructura-item { color: var(--text); border-left: 4px solid var(--brand-primary); }
+#listaCursos .estructura-item:hover { background: var(--brand-primary-soft); }
+.estructura-item h3, .estadisticas-panel h2 { color: var(--ink); }
+.estructura-item button[data-quitar] { color: var(--red-dark); border-color: var(--red-border); background: var(--red-bg); }
+
+.indicador strong { color: var(--brand-primary-dark); }
+.indicador small, .nota-indicadores, .leyenda { color: var(--text-muted); }
+.aprobadas { background: var(--green-dark); }
+.seguimiento { background: var(--amber-dark); }
+.sinDatos { background: var(--border-strong); }
+.tabla-estadisticas th { background: var(--surface-alt); color: var(--ink); }
+.tabla-estadisticas th, .tabla-estadisticas td { border-color: var(--border); }
+.tabla-estadisticas .atencion { color: var(--amber-dark); }
+.badge-testing { color: var(--amber-dark); background: var(--amber-bg); border: 1px solid var(--amber-border); }
+
+.modo-envios { color: var(--brand-primary-dark); }
+.resumen-envios span { background: var(--surface-alt); color: var(--text); }
+.envios-card button, .envios-card select { border-color: var(--border-strong); color: var(--text); }
+.tabla-envios-scroll th { background: var(--surface-alt); }
+.tabla-envios-scroll th, .tabla-envios-scroll td { border-color: var(--border); }
+.tabla-envios-scroll small { color: var(--text-muted); }
+.envios-card button:hover:not(:disabled) { border-color: var(--brand-primary); }
+
+.historial-dialog { color: var(--text); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-xl); }
+.historial-dialog p, .historial-dialog small { color: var(--text-muted); }
+.historial-dialog table { background: var(--surface); }
+.historial-dialog th { background: var(--surface-alt); color: var(--ink); }
+.historial-dialog td, .historial-dialog th { border-color: var(--border); }
+.eval button[onclick^="editarNota"], .eval form button[type="submit"] {
+  color: var(--brand-primary-dark); border-color: var(--brand-primary-border); background: var(--brand-primary-soft);
+}
+.eval button[onclick^="editarNota"]:hover, .eval form button[type="submit"]:hover {
+  color: white; background: var(--brand-primary); border-color: var(--brand-primary);
+}
+.eval form input { color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-xs); }
+.eval form [role="alert"] { color: var(--red-dark); }
+
+@media (max-width: 640px) {
+  .header .header-brand { gap: 10px; }
+  .header .header-logo-img { width: 38px; height: 38px; }
+  .header .header-brand-text h1 { font-size: 18px; }
+  .ciclo-toolbar { padding: 14px; gap: 10px; }
+}

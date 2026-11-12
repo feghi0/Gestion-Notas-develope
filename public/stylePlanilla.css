@@ -863,3 +863,318 @@ tbody tr:hover td:first-child {
     padding: 18px 14px;
   }
 }
+
+
+/* ── Optimización de la planilla docente (cursos de hasta 40 alumnos) ── */
+.tema-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tema-field > span {
+  color: var(--ink-700);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tema-field > span strong {
+  color: var(--red);
+}
+
+.tema-field small {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.planilla-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
+}
+
+.planilla-toolbar[hidden] {
+  display: none;
+}
+
+.planilla-busqueda {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: min(280px, 100%);
+  flex: 1 1 260px;
+  max-width: 360px;
+}
+
+.planilla-busqueda span {
+  color: var(--ink-700);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+.planilla-busqueda input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.planilla-busqueda input:focus {
+  outline: 3px solid rgba(197, 34, 31, .12);
+  border-color: var(--brand-primary);
+}
+
+.planilla-toolbar-info {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.planilla-contador {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.planilla-leyenda {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.planilla-leyenda span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.planilla-leyenda i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+}
+
+.leyenda-aprobada { background: var(--green-dark); }
+.leyenda-desaprobada { background: var(--red); }
+.leyenda-saldada { background: #94a3b8; }
+
+/* Compacta solamente la vista de quienes cargan notas; la vista del alumno no cambia. */
+.table-container.teacher-view th {
+  padding: 12px 9px;
+  font-size: 12px;
+}
+
+.table-container.teacher-view th:first-child {
+  width: 220px;
+  min-width: 220px;
+  padding-left: 16px;
+}
+
+.table-container.teacher-view td {
+  padding: 8px 7px;
+  vertical-align: middle;
+  font-size: 12px;
+}
+
+.table-container.teacher-view td:first-child {
+  padding-left: 16px;
+  min-width: 220px;
+}
+
+.table-container.teacher-view tbody tr:nth-child(even) td {
+  background: #f8fafc;
+}
+
+.table-container.teacher-view tbody tr:nth-child(even) td:first-child {
+  background: #f1f5f9;
+}
+
+.table-container.teacher-view tbody tr[hidden] {
+  display: none;
+}
+
+.alumno-planilla-nombre {
+  display: inline-block;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.eval-compact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: auto;
+  min-width: 0;
+  margin: 1px 2px 3px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  vertical-align: middle;
+  transition: none;
+}
+
+.eval-compact:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: transparent;
+}
+
+.eval-compact.eval-saldada {
+  opacity: 1;
+  background: transparent;
+  text-decoration: none;
+}
+
+.eval-compact .nota-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 35px;
+  height: 27px;
+  padding: 0 5px;
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .12);
+  transition: filter var(--transition-fast), transform var(--transition-fast);
+}
+
+.eval-compact .nota-chip:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.eval-compact .nota-chip:focus-visible,
+.eval-compact .eval-eliminar-mini:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+.nota-chip-aprobada { background: var(--green-dark); }
+.nota-chip-desaprobada { background: var(--red); }
+.nota-chip-saldada { background: #64748b; }
+.nota-chip-ajuste { background: #2563eb; }
+
+.eval-compact .nota-chip-acumulativa {
+  color: var(--blue-dark);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.eval-compact .eval-eliminar-mini {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 17px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.eval-compact .eval-eliminar-mini:hover {
+  color: var(--red-dark);
+  background: var(--red-bg);
+}
+
+.table-container.teacher-view .bim-resumen,
+.table-container.teacher-view .cierre-resumen {
+  margin-top: 5px;
+  padding: 5px 6px;
+}
+
+.table-container.teacher-view .bim-resumen-label,
+.table-container.teacher-view .cierre-resumen-label {
+  font-size: 9px;
+}
+
+.table-container.teacher-view .bim-resumen-valor {
+  font-size: 13px;
+}
+
+.table-container.teacher-view .cierre-resumen-valor {
+  font-size: 12px;
+}
+
+
+@media (hover: hover) and (pointer: fine) {
+  .eval-compact .eval-eliminar-mini {
+    width: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .eval-compact:hover .eval-eliminar-mini,
+  .eval-compact:focus-within .eval-eliminar-mini {
+    width: 15px;
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.eval-compact .nota-chip-estatico {
+  cursor: default;
+}
+
+@media (max-width: 900px) {
+  .planilla-toolbar-info {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 600px) {
+  .planilla-toolbar {
+    align-items: stretch;
+    padding: 12px;
+  }
+  .planilla-busqueda {
+    max-width: none;
+  }
+  .planilla-toolbar-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .planilla-leyenda {
+    gap: 8px;
+  }
+}

@@ -56,6 +56,10 @@ function puedeEscribir() {
   return !cicloSoloLectura && (permiso === "escritura" || permiso === "ambos");
 }
 
+function esVistaDocente() {
+  return rango === "profesor";
+}
+
 // ─── Lógica de acumulativos ───────────────────────────────────────────────────
 
 function calcularSaldadas(evaluacionesAlumno) {
@@ -216,6 +220,69 @@ function renderResumenCierreHTML(estado) {
     </div>`;
 }
 
+function renderNotaCompacta(ev, alumno, { saldada = false } = {}) {
+  const nota = Number(ev.nota);
+  const participacion = esParticipacion(ev.tipo);
+  let claseNota = "nota-chip";
+
+  if (saldada) claseNota += " nota-chip-saldada";
+  else if (participacion) claseNota += " nota-chip-ajuste";
+  else if (nota < 6) claseNota += " nota-chip-desaprobada";
+  else claseNota += " nota-chip-aprobada";
+
+  const marcaAcumulativa = Number(ev.es_acumulativo) === 1
+    ? `<span class="nota-chip-acumulativa" title="Evaluación acumulativa" aria-label="Evaluación acumulativa">↻</span>`
+    : "";
+
+  const notaHTML = puedeEscribir()
+    ? `<button type="button" class="${claseNota}"
+        onclick="editarNota(this, ${Number(ev.id)}, ${Number(alumno.id)})"
+        title="Editar nota" aria-label="Editar nota ${escHTML(ev.nota)}">${escHTML(ev.nota)}</button>`
+    : `<span class="${claseNota} nota-chip-estatico" aria-label="Nota ${escHTML(ev.nota)}">${escHTML(ev.nota)}</span>`;
+  const eliminarHTML = puedeEscribir()
+    ? `<button type="button" class="eval-eliminar-mini"
+        onclick="eliminarEvaluacion(${Number(ev.id)}, ${Number(alumno.id)})"
+        title="Eliminar evaluación" aria-label="Eliminar evaluación">×</button>`
+    : "";
+
+  return `
+    <div class="eval eval-compact${saldada ? " eval-saldada" : ""}">
+      ${notaHTML}
+      ${marcaAcumulativa}
+      ${eliminarHTML}
+    </div>`;
+}
+
+function normalizarTextoBusqueda(valor) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es");
+}
+
+function filtrarAlumnos() {
+  const buscador = document.getElementById("buscarAlumno");
+  if (!buscador) return;
+
+  const consulta = normalizarTextoBusqueda(buscador.value.trim());
+  const filas = Array.from(tbody.querySelectorAll("tr"));
+  let visibles = 0;
+
+  for (const fila of filas) {
+    const coincide = !consulta || normalizarTextoBusqueda(fila.dataset.nombre).includes(consulta);
+    fila.hidden = !coincide;
+    if (coincide) visibles++;
+  }
+
+  const contador = document.getElementById("contadorAlumnos");
+  if (contador) {
+    const total = filas.length;
+    contador.textContent = consulta
+      ? `${visibles} de ${total} alumnos`
+      : `${total} ${total === 1 ? "alumno" : "alumnos"}`;
+  }
+}
+
 function renderBimestre(evaluacionesAlumno, alumno, num) {
   const evaluaciones = evaluacionesAlumno.filter(
     e => Number(e.bimestre) === Number(num) && !esCierre(e)
@@ -240,8 +307,12 @@ function renderBimestre(evaluacionesAlumno, alumno, num) {
       claseNota += " eval-nota-roja";
     }
 
-    const badgeAcum = esAcum ? `<span class="eval-acum-badge">Acumulativa</span><br>` : "";
+    if (esVistaDocente()) {
+      html += renderNotaCompacta(ev, alumno, { saldada: estaSaldada });
+      continue;
+    }
 
+    const badgeAcum = esAcum ? `<span class="eval-acum-badge">Acumulativa</span><br>` : "";
     html += `
       <div class="${claseEval}">
         <div class="eval-top">
@@ -250,9 +321,6 @@ function renderBimestre(evaluacionesAlumno, alumno, num) {
         </div>
         ${badgeAcum}
         <div class="eval-desc">${escHTML(ev.descripcion)}</div>
-        ${puedeEscribir()
-          ? `<button type="button" onclick="editarNota(this, ${Number(ev.id)}, ${Number(alumno.id)})">Editar</button> <button onclick="eliminarEvaluacion(${Number(ev.id)}, ${Number(alumno.id)})">Eliminar</button>`
-          : ""}
       </div>`;
   }
 
@@ -267,6 +335,10 @@ function renderCeldaCierre1(evaluacionesAlumno, alumno, habilitado) {
 
   let html = "";
   for (const ev of estado.temas) {
+    if (esVistaDocente()) {
+      html += renderNotaCompacta(ev, alumno);
+      continue;
+    }
     const nota      = Number(ev.nota);
     const claseNota = nota >= 6 ? "eval-nota" : "eval-nota eval-nota-roja";
     html += `
@@ -276,9 +348,6 @@ function renderCeldaCierre1(evaluacionesAlumno, alumno, habilitado) {
           <span class="${claseNota}">${escHTML(ev.nota)}</span>
         </div>
         <span class="eval-cierre-badge dic">Diciembre</span>
-        ${puedeEscribir()
-          ? `<button type="button" onclick="editarNota(this, ${Number(ev.id)}, ${Number(alumno.id)})">Editar</button> <button onclick="eliminarEvaluacion(${Number(ev.id)}, ${Number(alumno.id)})">Eliminar</button>`
-          : ""}
       </div>`;
   }
   html += renderResumenCierreHTML(estado);
@@ -294,6 +363,10 @@ function renderCeldaCierre2(evaluacionesAlumno, alumno, habilitado) {
   let html = "";
   if (estado) {
     for (const ev of estado.temas) {
+      if (esVistaDocente()) {
+        html += renderNotaCompacta(ev, alumno);
+        continue;
+      }
       const nota      = Number(ev.nota);
       const claseNota = nota >= 6 ? "eval-nota" : "eval-nota eval-nota-roja";
       html += `
@@ -303,9 +376,6 @@ function renderCeldaCierre2(evaluacionesAlumno, alumno, habilitado) {
             <span class="${claseNota}">${escHTML(ev.nota)}</span>
           </div>
           <span class="eval-cierre-badge feb">Febrero</span>
-          ${puedeEscribir()
-            ? `<button type="button" onclick="editarNota(this, ${Number(ev.id)}, ${Number(alumno.id)})">Editar</button> <button onclick="eliminarEvaluacion(${Number(ev.id)}, ${Number(alumno.id)})">Eliminar</button>`
-            : ""}
         </div>`;
     }
     html += renderResumenCierreHTML(estado);
@@ -331,6 +401,10 @@ async function cargar() {
     tbody.innerHTML    = "";
     alumnosGlobales    = data.alumnos;
     evaluacionesGlobal = data.notas;
+
+    const toolbarPlanilla = document.getElementById("planillaToolbar");
+    document.getElementById("tableContainer")?.classList.toggle("teacher-view", esVistaDocente());
+    if (toolbarPlanilla) toolbarPlanilla.hidden = data.alumnos.length <= 1;
 
     if (puedeEscribir()) {
       document.getElementById("globalForm").style.display          = "block";
@@ -421,8 +495,9 @@ async function cargar() {
       const hayOverride     = ovCq1 || ovCq2 || ovNf;
 
       const row = document.createElement("tr");
+      row.dataset.nombre = `${alumno.apellido || ""} ${alumno.nombre || ""}`;
       row.innerHTML = `
-        <td>${escHTML(alumno.apellido)}, ${escHTML(alumno.nombre)}</td>
+        <td><span class="alumno-planilla-nombre">${escHTML(alumno.apellido)}, ${escHTML(alumno.nombre)}</span></td>
         <td>${renderBimestre(evAlumno, alumno, 1)}</td>
         <td>${renderBimestre(evAlumno, alumno, 2)}</td>
         ${renderCeldaCalculada(cuat1, ovCq1, alumno.id)}
@@ -435,6 +510,8 @@ async function cargar() {
       `;
       tbody.appendChild(row);
     }
+
+    filtrarAlumnos();
 
     if (puedeEscribir()) {
       renderFormularioCierres(alumnosParaDic, alumnosParaFeb);
@@ -576,7 +653,16 @@ async function guardarGlobal() {
   const tipo        = document.getElementById("globalTipo").value;
   const bimestre    = document.getElementById("globalBimestre").value;
 
-  if (!descripcion) { mostrarMensaje("Escribí de qué se trata la evaluación (por ejemplo: 'Examen unidad 3') antes de guardar.", "error"); return; }
+  if (!descripcion) {
+    const campoTema = document.getElementById("globalDescripcion");
+    campoTema?.focus();
+    mostrarMensaje("El tema o descripción es obligatorio. Completalo antes de guardar.", "error");
+    return;
+  }
+  if (descripcion.length > 500) {
+    mostrarMensaje("El tema o descripción no puede superar los 500 caracteres.", "error");
+    return;
+  }
 
   const esAcumulativo    = document.getElementById("globalEsAcumulativo").checked;
   let evaluacionOrigenId = null;

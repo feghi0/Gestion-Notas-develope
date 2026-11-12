@@ -42,7 +42,12 @@
   <div class="global-form" id="globalForm" style="display:none;">
     <h2>Carga global de notas</h2>
     <div class="form-grid">
-      <input type="text" id="globalDescripcion" placeholder="Tema / descripción">
+      <label class="tema-field" for="globalDescripcion">
+        <span>Tema / descripción <strong aria-hidden="true">*</strong></span>
+        <input type="text" id="globalDescripcion" placeholder="Ej.: Examen unidad 3" maxlength="500"
+          aria-describedby="globalDescripcionAyuda" required>
+        <small id="globalDescripcionAyuda">Obligatorio. El alumno verá este tema; en tu planilla solo se mostrará la nota.</small>
+      </label>
       <select id="globalTipo">
         <option value="Examen escrito">Examen escrito</option>
         <option value="Oral">Oral</option>
@@ -88,9 +93,24 @@
   </div>
 
   <!-- Tabla de planilla -->
-  <div class="table-container">
+  <div class="table-container" id="tableContainer">
+    <div class="planilla-toolbar" id="planillaToolbar" hidden>
+      <label class="planilla-busqueda" for="buscarAlumno">
+        <span>Buscar alumno</span>
+        <input type="search" id="buscarAlumno" placeholder="Apellido o nombre…"
+          oninput="filtrarAlumnos()" autocomplete="off">
+      </label>
+      <div class="planilla-toolbar-info">
+        <span class="planilla-contador" id="contadorAlumnos" aria-live="polite">0 alumnos</span>
+        <div class="planilla-leyenda" aria-label="Referencias de las notas">
+          <span><i class="leyenda-aprobada"></i> 6 a 10</span>
+          <span><i class="leyenda-desaprobada"></i> 1 a 5</span>
+          <span><i class="leyenda-saldada"></i> Recuperada</span>
+        </div>
+      </div>
+    </div>
     <div class="table-scroll">
-      <table>
+      <table id="tablaPlanilla">
         <thead>
           <tr>
             <th>Alumno</th>

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+ <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>Períodos de recuperación</title>
+ <link rel="icon" href="img/logo.jpg" type="image/jpeg">
+ <link rel="stylesheet" href="styleBoletines.css"><link rel="stylesheet" href="styleInstitucional.css"><link rel="stylesheet" href="stylePeriodos.css">
+</head>
+<body>
+ <header class="header"><div class="header-brand"><img src="img/logo.jpg" class="header-logo-img" alt="Escudo ET N°35"><div class="header-brand-text"><h1>Períodos de recuperación</h1><p>ET N°35 · Administración del ciclo lectivo</p></div></div><a class="volver-btn" href="dashboard.html">Volver al inicio</a></header>
+ <main class="container">
+  <section class="card"><label for="cicloPeriodo">Ciclo lectivo</label><select id="cicloPeriodo" aria-label="Ciclo lectivo"></select><p>La programación se aplica a todos los cursos del ciclo. El período se habilita al comenzar la fecha inicial y se bloquea al terminar la fecha final, según la hora de Buenos Aires.</p></section>
+  <p id="estadoPeriodos" role="status" aria-live="polite"></p>
+  <div id="listaPeriodos" class="periodos-grid"></div>
+ </main>
+ <script src="api.js"></script><script src="scriptPeriodos.js"></script>
+</body></html>

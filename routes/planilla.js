@@ -8,7 +8,7 @@ const ExcelJS = require("exceljs");
 const { cursoAbierto } = require("../lib/ciclosLectivos");
 const { calcularResumenMateria } = require("../lib/calculoNotas");
 const reglas = require('../public/reglasAcademicas');
-const {obtenerPeriodos,validarPeriodo}=require('../lib/periodosRecuperacion');
+const {obtenerPeriodos,guardarPeriodo,validarPeriodo}=require('../lib/periodosRecuperacion');
 const { validarRecuperacion, validarCierre, fechaHoy, error: errorAcademico } = require('../lib/validacionAcademica');
 // ─── Helpers de acceso ────────────────────────────────────────────────────────
 
@@ -1105,6 +1105,8 @@ router.patch('/evaluacion/:id',authMiddleware,async(req,res)=>{
   await validarPeriodo(conn,materiaId,cierre,fecha);
   if(typeof descripcion!=='string'||!descripcion.trim()||descripcion.length>500||typeof tipo!=='string'||!tipo.trim()||tipo.length>100||!reglas.validarFecha(fecha))throw errorAcademico('Completá tema, tipo y fecha válidos.');
   if(!cierre&&!bimestreValido(bimestre))throw errorAcademico('Bimestre inválido.');
+  if(tipo!==actual.tipo&&!reglas.TIPOS_EVALUACION.includes(tipo))throw errorAcademico('Seleccioná un tipo de evaluación válido.');
+  if(cierre&&tipo!==actual.tipo)throw errorAcademico('El tipo de una instancia de diciembre o febrero no se puede cambiar.');
   if(body.obligatoria!==undefined&&typeof body.obligatoria!=='boolean')throw errorAcademico('Obligatoriedad inválida.');
   const conceptual=body.notaConceptual===undefined?null:body.notaConceptual;
   if(conceptual!==null&&conceptual!=='EN_PROCESO')throw errorAcademico('Estado conceptual inválido.');
@@ -1112,8 +1114,21 @@ router.patch('/evaluacion/:id',authMiddleware,async(req,res)=>{
   if(!conceptual){const mensaje=reglas.validarNota(body.nota,tipo);if(mensaje)throw errorAcademico(mensaje);}
   const observaciones=body.observaciones ?? actual.observaciones;
   if(typeof observaciones!=='string'||observaciones.length>2000)throw errorAcademico('Las observaciones admiten hasta 2000 caracteres.');
-  if(actual.evaluacion_origen_id)await validarRecuperacion(conn,{origenId:actual.evaluacion_origen_id,alumnoId,materiaId,fecha,cierre,bimestre});
-  await conn.query('UPDATE evaluaciones SET descripcion=?,tipo=?,fecha=?,bimestre=?,obligatoria=? WHERE id=?',[descripcion.trim(),tipo,fecha,bimestre,body.obligatoria ?? actual.obligatoria,evaluacionId]);
+  const origenId=body.evaluacionOrigenId===undefined?actual.evaluacion_origen_id:body.evaluacionOrigenId===null?null:Number(body.evaluacionOrigenId);
+  if(origenId!==null&&(!Number.isSafeInteger(Number(origenId))||Number(origenId)<1))throw errorAcademico('Evaluación original inválida.');
+  if(cierre&&!origenId)throw errorAcademico('La instancia de cierre debe conservar una evaluación original.');
+  const grafo=await conn.query('SELECT id,evaluacion_origen_id FROM evaluaciones WHERE curso_materia_id=?',[materiaId]);
+  const visitados=new Set([evaluacionId]);let ancestro=origenId;
+  while(ancestro){if(visitados.has(Number(ancestro)))throw errorAcademico('La evaluación no puede ser acumulativa de sí misma ni de una evaluación que dependa de ella.');visitados.add(Number(ancestro));ancestro=grafo.find(e=>Number(e.id)===Number(ancestro))?.evaluacion_origen_id;}
+  if(reglas.esParticipacion(tipo)&&(origenId||grafo.some(e=>Number(e.evaluacion_origen_id)===evaluacionId)))throw errorAcademico('La participación no puede ser origen ni resultado de una acumulativa.');
+  const notasCompartidas=await conn.query('SELECT alumno_id,nota,nota_conceptual FROM notas WHERE evaluacion_id=?',[evaluacionId]);
+  for(const n of notasCompartidas){
+   const propia=Number(n.alumno_id)===alumnoId,valor=propia?body.nota:n.nota,concepto=propia?conceptual:n.nota_conceptual;
+   const invalida=concepto?(reglas.esParticipacion(tipo)?'La participación no admite calificaciones conceptuales.':null):reglas.validarNota(valor,tipo);
+   if(invalida)throw errorAcademico('El cambio no es válido para todas las notas de esta evaluación: '+invalida);
+   if(origenId)await validarRecuperacion(conn,{origenId,alumnoId:n.alumno_id,materiaId,fecha,cierre,bimestre});
+  }
+  await conn.query('UPDATE evaluaciones SET descripcion=?,tipo=?,fecha=?,bimestre=?,obligatoria=?,evaluacion_origen_id=?,es_acumulativo=? WHERE id=?',[descripcion.trim(),tipo,fecha,bimestre,body.obligatoria ?? actual.obligatoria,origenId,origenId&&!cierre?1:0,evaluacionId]);
   await conn.query('UPDATE notas SET nota=?,nota_conceptual=?,observaciones=? WHERE id=?',[conceptual?null:Number(body.nota),conceptual,observaciones,actual.nota_id]);
   if(!String(actual.descripcion||'').startsWith('Import override:'))await limpiarOverridesAlumno(conn,alumnoId,materiaId);
   await conn.commit();res.json({success:true});
@@ -1130,10 +1145,10 @@ router.patch('/periodos-recuperacion/:cursoMateriaId/:cierre',authMiddleware,asy
   conn=await pool.getConnection();
   const acceso=await verificarAcceso(conn,materiaId,req.user,true);if(!acceso.ok)throw errorAcademico(acceso.error,acceso.status);
   const {cicloLectivo}=await obtenerPeriodos(conn,materiaId);
-  await conn.query(`INSERT INTO periodos_recuperacion(ciclo_lectivo,cierre,modo,actor_id) VALUES(?,?,?,?)
-    ON CONFLICT(ciclo_lectivo,cierre) DO UPDATE SET modo=EXCLUDED.modo,actor_id=EXCLUDED.actor_id,actualizado_en=clock_timestamp()`,[cicloLectivo,cierre,modo,req.user.id]);
+  await conn.beginTransaction();await conn.query('SELECT pg_advisory_xact_lock(842617,?)',[cicloLectivo]);
+  await guardarPeriodo(conn,{cicloLectivo,cierre,modo,actorId:req.user.id});await conn.commit();
   res.json({success:true,recuperaciones:await obtenerPeriodos(conn,materiaId)});
- }catch(err){res.status(err.status||500).json({success:false,error:err.status?err.message:'No pudimos configurar el período.'});}
+ }catch(err){if(conn)await conn.rollback().catch(()=>{});res.status(err.status||500).json({success:false,error:err.status?err.message:'No pudimos configurar el período.'});}
  finally{if(conn)conn.release();}
 });
 

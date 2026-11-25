@@ -50,16 +50,23 @@
     return nums.length ? (nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(2) : '-';
   }
   // Compatibilidad del nombre público; aplica a diciembre y febrero. El servidor decide el modo.
-  function validarPeriodoDiciembre(cierre, fecha, ahora = new Date(), modo = 'automatico') {
+  function validarPeriodoDiciembre(cierre, fecha, ahora = new Date(), modo = 'automatico', plazo = {}) {
     cierre=Number(cierre);
     if (![1,2].includes(cierre)) return null;
     const nombre=cierre===1?'diciembre':'febrero',mesEsperado=cierre===1?'12':'02';
     if(modo==='bloqueado')return 'El período de '+nombre+' está bloqueado por el regente.';
+    if(modo==='programado'){
+      const hoy=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit'}).format(ahora);
+      if(!validarFecha(plazo.desde)||!validarFecha(plazo.hasta)||plazo.desde>plazo.hasta||hoy<plazo.desde||hoy>plazo.hasta)return 'El período de '+nombre+' está fuera del plazo habilitado por el regente.';
+      if(fecha&&(!validarFecha(fecha)||fecha<plazo.desde||fecha>plazo.hasta))return 'La fecha de evaluación debe estar dentro del plazo habilitado de '+nombre+'.';
+      return null;
+    }
     if(modo==='habilitado')return null;
     const mes=new Intl.DateTimeFormat('en-US',{timeZone:'America/Argentina/Buenos_Aires',month:'2-digit'}).format(ahora);
     if(mes!==mesEsperado)return 'Las notas de '+nombre+' solo pueden cargarse o modificarse durante '+nombre+' (hora de Buenos Aires), salvo habilitación del regente.';
     if(fecha&&(!validarFecha(fecha)||String(fecha).slice(5,7)!==mesEsperado))return 'La fecha de la evaluación debe pertenecer a '+nombre+'.';
     return null;
   }
-  return { EN_PROCESO, validarNota, validarFecha, puedeRecuperar, esParticipacion, valorParticipacion, calcularNotaFinal, validarPeriodoDiciembre };
+  const TIPOS_EVALUACION=['Examen escrito','Oral','TP','Participacion +0.5','Participacion +1','Participacion -0.5'];
+  return { EN_PROCESO, TIPOS_EVALUACION, validarNota, validarFecha, puedeRecuperar, esParticipacion, valorParticipacion, calcularNotaFinal, validarPeriodoDiciembre };
 });

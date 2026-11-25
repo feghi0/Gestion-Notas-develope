@@ -17,6 +17,7 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
   await db.exec(fs.readFileSync("supabase/migrations/20261125005446_detailed_grades_academic_closures.sql", "utf8"));
   await db.exec(fs.readFileSync("supabase/migrations/20261125013316_recovery_period_order.sql", "utf8"));
   await db.exec(fs.readFileSync("supabase/migrations/20261125015748_periodos_recuperacion.sql", "utf8"));
+  await db.exec(fs.readFileSync("supabase/migrations/20261125025222_periodos_programados.sql", "utf8"));
   const connection = wrapClient({
     async query(config) {
       const text = typeof config === "string" ? config : config.text;
@@ -239,7 +240,7 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
   // Fijar solamente el reloj de la política para verificar el bloqueo incluso al ejecutar en diciembre.
   const reglas=require('../public/reglasAcademicas');
   const validarPeriodoReal=reglas.validarPeriodoDiciembre;
-  reglas.validarPeriodoDiciembre=(cierre,fecha,_ahora,modo)=>validarPeriodoReal(cierre,fecha,new Date('2026-08-15T15:00:00Z'),modo);
+  reglas.validarPeriodoDiciembre=(cierre,fecha,_ahora,modo,plazo)=>validarPeriodoReal(cierre,fecha,new Date('2026-08-15T15:00:00Z'),modo,plazo);
   try {
     const datosDic={cursoMateriaId:1,alumnoId:6,nota:8,notas:[{alumnoId:6,nota:8}],numeroCierre:1,cierre:1,fecha:'2026-12-15',evaluacionId:original.id,evaluacionOrigenId:original.id};
     for(const [ruta,metodo] of [['/planilla/cierre-tema','PATCH'],['/planilla/cierre-global','POST'],['/planilla/evaluacion','POST'],['/planilla/evaluacion-global','POST']]){
@@ -272,6 +273,20 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
     assert.equal(estado.periodos.find(p=>p.cierre===1).habilitado,false);
     assert.equal(estado.periodos.find(p=>p.cierre===2).habilitado,true);
     for(const cierre of [1,2])assert.equal((await configurar(cierre,'automatico')).status,200);
+    // Administración central, sin depender de una materia, y caducidad efectiva.
+    assert.equal((await request('/periodos/2026',newTeacherToken)).status,403);
+    const programar=(cierre,desde,hasta,token=admin)=>request('/periodos/2026/'+cierre,token,{modo:'programado',desde,hasta},'PUT');
+    assert.equal((await programar(1,'2026-08-01','2026-08-31',newTeacherToken)).status,403);
+    assert.equal((await programar(1,'2026-08-31','2026-08-01')).status,400);
+    assert.equal((await programar(1,'2026-08-01','2026-08-31')).status,200);
+    assert.equal((await programar(2,'2026-08-15','2026-09-01')).status,400);
+    assert.equal((await programar(2,'2026-09-01','2026-09-30')).status,200);
+    const central=await (await request('/periodos/2026',admin)).json();
+    assert.equal(central.periodos[0].habilitado,true);assert.equal(central.periodos[1].habilitado,false);
+    assert.equal((await request('/planilla/cierre-tema',admin,{...manual,numeroCierre:2,cierre:2,evaluacionId:dicManual.id,evaluacionOrigenId:dicManual.id,nota:8},'PATCH')).status,403);
+    assert.equal((await programar(1,'2026-07-01','2026-07-31')).status,200);
+    assert.equal((await (await request('/periodos/2026',admin)).json()).periodos[0].habilitado,false);
+    for(const cierre of [1,2])assert.equal((await request('/periodos/2026/'+cierre,admin,{modo:'automatico'},'PUT')).status,200);
     const hijos=(await db.query('SELECT id FROM evaluaciones WHERE evaluacion_origen_id=$1',[dicManual.id])).rows;
     for(const e of [...hijos,dicManual]){await db.query('DELETE FROM notas WHERE evaluacion_id=$1',[e.id]);await db.query('DELETE FROM evaluaciones WHERE id=$1',[e.id]);}
   } finally { reglas.validarPeriodoDiciembre=validarPeriodoReal; }
@@ -285,6 +300,22 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
   const conceptual=(await db.query('SELECT nota,nota_conceptual,observaciones FROM notas WHERE evaluacion_id=$1',[original.id])).rows[0];
   assert.equal(conceptual.nota,null);assert.equal(conceptual.nota_conceptual,'EN_PROCESO');assert.equal(conceptual.observaciones,'Revisar unidad 1');
   {const r=await request('/planilla/evaluacion-global',admin,{...recuperacion,fecha:'2026-05-02',notas:[{alumnoId:6,nota:8}]});assert.equal(r.status,200,JSON.stringify(await r.json()));}
+
+  // El vínculo editado es compartido: todos sus alumnos deben tener un origen pendiente.
+  {const r=await request('/planilla/evaluacion-global',admin,{...originalBody,descripcion:'Editable acumulativa',fecha:'2026-05-03',notas:[{alumnoId:6,nota:7}]});assert.equal(r.status,200,JSON.stringify(await r.json()));}
+  const editable=(await db.query("SELECT id FROM evaluaciones WHERE descripcion='Editable acumulativa'")).rows[0];
+  await db.query('INSERT INTO notas(evaluacion_id,alumno_id,nota) VALUES($1,5,7)',[editable.id]);
+  const editarVinculo=(extras={})=>request('/planilla/evaluacion/'+editable.id,admin,{alumnoId:6,cursoMateriaId:1,notaAnterior:7,nota:7,fecha:'2026-05-03',evaluacionOrigenId:original.id,...extras},'PATCH');
+  assert.equal((await editarVinculo()).status,400);
+  await db.query('DELETE FROM notas WHERE evaluacion_id=$1 AND alumno_id=5',[editable.id]);
+  assert.equal((await editarVinculo({evaluacionOrigenId:editable.id})).status,400);
+  assert.equal((await editarVinculo({tipo:'Tipo inventado'})).status,400);
+  assert.equal((await editarVinculo({tipo:'Oral',descripcion:'Tema del detalle'})).status,200);
+  const vinculada=(await db.query('SELECT es_acumulativo,evaluacion_origen_id FROM evaluaciones WHERE id=$1',[editable.id])).rows[0];
+  assert.equal(vinculada.es_acumulativo,1);assert.equal(vinculada.evaluacion_origen_id,original.id);
+  assert.equal((await request('/planilla/evaluacion/'+original.id,admin,{...detalle,notaAnterior:null,nota:4,evaluacionOrigenId:editable.id},'PATCH')).status,400);
+  assert.equal((await editarVinculo({evaluacionOrigenId:null})).status,200);
+  assert.equal((await db.query('SELECT es_acumulativo FROM evaluaciones WHERE id=$1',[editable.id])).rows[0].es_acumulativo,0);
 
   await db.query("INSERT INTO materias(nombre) VALUES ('Materia de cierre')");
   const materiaCierre=(await db.query("INSERT INTO curso_materia(curso_id,materia_id) SELECT 1,id FROM materias WHERE id NOT IN(SELECT materia_id FROM curso_materia WHERE curso_id=1) LIMIT 1 RETURNING id")).rows[0];

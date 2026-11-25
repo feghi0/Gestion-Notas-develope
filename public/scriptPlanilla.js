@@ -8,6 +8,7 @@ function bloqueoPeriodoRecuperacion(cierre,fecha){
  if(periodo){
   if(!periodo.habilitado)return 'El período de '+periodo.nombre.toLowerCase()+' no está habilitado. Consultá al regente.';
   // El estado efectivo lo calcula el servidor con su reloj de Buenos Aires.
+  if(periodo.modo==='programado'&&fecha&&(fecha<periodo.desde||fecha>periodo.hasta))return 'La fecha debe estar dentro del plazo habilitado.';
   if(periodo.modo==='automatico'&&fecha&&String(fecha).slice(5,7)!==(Number(cierre)===1?'12':'02'))return 'La fecha debe pertenecer a '+periodo.nombre.toLowerCase()+'.';
   return null;
  }

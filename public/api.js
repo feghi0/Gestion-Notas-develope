@@ -1,5 +1,12 @@
 // ─── api.js ───────────────────────────────────────────────────────────────────
 // Funciones compartidas por todas las páginas.
+document.addEventListener('DOMContentLoaded',()=>{
+  if(localStorage.getItem('rango')!=='regente'||location.pathname.endsWith('/periodos.html'))return;
+  const header=document.querySelector('.header');if(!header)return;
+  let acciones=header.querySelector('.header-actions');
+  if(!acciones){acciones=document.createElement('div');acciones.className='header-actions';header.append(acciones);}
+  const boton=document.createElement('button');boton.type='button';boton.className='header-btn volver-btn';boton.textContent='Períodos de recuperación';boton.onclick=()=>location.href='periodos.html';acciones.prepend(boton);
+});
 
 // ─── Sanitización XSS ───────────────────────────────────────────────────────
 

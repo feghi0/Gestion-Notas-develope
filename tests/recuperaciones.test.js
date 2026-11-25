@@ -28,6 +28,18 @@ test('Febrero y diciembre respetan las habilitaciones y bloqueos manuales',()=>{
   assert.ok(validarPeriodoDiciembre(cierre,'2026-08-15',natural));
  }
 });
+
+test('Un plazo se activa al iniciar y se bloquea al finalizar según Buenos Aires',()=>{
+ const plazo={desde:'2026-12-10',hasta:'2026-12-20'};
+ for(const cierre of [1,2]){
+  assert.ok(validarPeriodoDiciembre(cierre,undefined,new Date('2026-12-10T02:59:59Z'),'programado',plazo));
+  assert.equal(validarPeriodoDiciembre(cierre,'2026-12-10',new Date('2026-12-10T03:00:00Z'),'programado',plazo),null);
+  assert.equal(validarPeriodoDiciembre(cierre,undefined,new Date('2026-12-21T02:59:59Z'),'programado',plazo),null);
+  assert.ok(validarPeriodoDiciembre(cierre,undefined,new Date('2026-12-21T03:00:00Z'),'programado',plazo));
+  assert.ok(validarPeriodoDiciembre(cierre,'2026-12-09',new Date('2026-12-15T15:00:00Z'),'programado',plazo));
+  assert.ok(validarPeriodoDiciembre(cierre,undefined,new Date('2026-12-15T15:00:00Z'),'programado',{}));
+ }
+});
 test('Una evaluación del tercer bimestre solo se recupera en tercero o cuarto',()=>{
  const original={alumno_id:1,nota:4,tipo:'Examen escrito',bimestre:3,fecha:'2026-08-01'};
  for(const b of [1,2,0])assert.ok(puedeRecuperar(original,1,'2026-10-01',0,b));

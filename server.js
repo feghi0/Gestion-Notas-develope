@@ -22,6 +22,7 @@ app.use("/planilla",  require("./routes/planilla"));
 app.use("/boletines", require("./routes/boletines"));
 app.use("/usuarios", require("./routes/usuarios"));
 app.use("/ciclos", require("./routes/ciclos"));
+app.use("/periodos", require("./routes/periodos"));
 app.use("/estructura", require("./routes/estructura"));
 app.use("/estadisticas", require("./routes/estadisticas"));
 app.use("/api/cron", require("./routes/cron"));

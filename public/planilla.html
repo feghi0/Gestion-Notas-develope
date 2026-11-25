@@ -48,7 +48,7 @@
           aria-describedby="globalDescripcionAyuda" required>
         <small id="globalDescripcionAyuda">Obligatorio. El alumno verá este tema; en tu planilla solo se mostrará la nota.</small>
       </label>
-      <select id="globalTipo">
+      <label>Fecha<input type="date" id="globalFecha" required></label><label><input type="checkbox" id="globalObligatoria" checked> Evaluación obligatoria</label><select id="globalTipo">
         <option value="Examen escrito">Examen escrito</option>
         <option value="Oral">Oral</option>
         <option value="TP">Trabajo práctico</option>
@@ -104,7 +104,7 @@
         <span class="planilla-contador" id="contadorAlumnos" aria-live="polite">0 alumnos</span>
         <div class="planilla-leyenda" aria-label="Referencias de las notas">
           <span><i class="leyenda-aprobada"></i> 6 a 10</span>
-          <span><i class="leyenda-desaprobada"></i> 1 a 5</span>
+          <span><i class="leyenda-en-proceso"></i> 1 a 5</span>
           <span><i class="leyenda-saldada"></i> Recuperada</span>
         </div>
       </div>
@@ -114,11 +114,11 @@
         <thead>
           <tr>
             <th>Alumno</th>
-            <th>1er Bimestre</th>
-            <th>2do Bimestre</th>
+            <th data-bimestre="1"><span>1er Bimestre</span><button type="button" class="toggle-bimestre" data-toggle="1" aria-expanded="true">Ocultar</button></th>
+            <th data-bimestre="2"><span>2do Bimestre</span><button type="button" class="toggle-bimestre" data-toggle="2" aria-expanded="true">Ocultar</button></th>
             <th>1er Cuatrimestre</th>
-            <th>3er Bimestre</th>
-            <th>4to Bimestre</th>
+            <th data-bimestre="3"><span>3er Bimestre</span><button type="button" class="toggle-bimestre" data-toggle="3" aria-expanded="true">Ocultar</button></th>
+            <th data-bimestre="4"><span>4to Bimestre</span><button type="button" class="toggle-bimestre" data-toggle="4" aria-expanded="true">Ocultar</button></th>
             <th>2do Cuatrimestre</th>
             <th>1er Cierre (Dic.)</th>
             <th>2do Cierre (Feb.)</th>
@@ -136,7 +136,10 @@
 </div>
 
 <script src="api.js"></script>
+<script src="reglasAcademicas.js"></script>
+<script src="calculoNotas.js"></script>
 <script src="scriptPlanilla.js"></script>
+<script src="planillaUI.js"></script>
 <script src="scriptHistorial.js"></script>
 
 </body>

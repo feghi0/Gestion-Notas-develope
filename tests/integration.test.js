@@ -14,6 +14,7 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
   await db.exec(fs.readFileSync("supabase/migrations/20261015141030_bulletin_delivery_status.sql", "utf8"));
   await db.exec(fs.readFileSync("supabase/migrations/20261015155214_academic_years.sql", "utf8"));
   await db.exec(fs.readFileSync("supabase/migrations/20261026021850_automatic_academic_year.sql", "utf8"));
+  await db.exec(fs.readFileSync("supabase/migrations/20261125005446_detailed_grades_academic_closures.sql", "utf8"));
   const connection = wrapClient({
     async query(config) {
       const text = typeof config === "string" ? config : config.text;
@@ -170,7 +171,7 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
   const newTeacherToken=(await newLogin.json()).token;
   assert.equal((await request("/dashboard/2", newTeacherToken)).status, 200);
   const rls = await db.query("SELECT tablename FROM pg_tables WHERE schemaname='public' AND rowsecurity");
-  assert.equal(rls.rows.length, 12);
+  assert.equal(rls.rows.length, 14);
   // Dos ciclos con el mismo curso y alumno no comparten inscripciones ni notas.
   assert.equal((await request("/ciclos", student, { anio:2027, copiarDe:2026 })).status,401);
   assert.equal((await request("/ciclos", newTeacherToken, { anio:2027 })).status,403);
@@ -221,4 +222,32 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
   assert.equal(zip.status,200);assert.ok(zip.headers.get("content-disposition").includes("2026"));await zip.arrayBuffer();
   assert.equal((await request("/ciclos/2026/activar",admin,{})).status,409);
   assert.equal((await request("/ciclos/2026/reabrir",admin,{})).status,200);
+  // Validaciones nuevas: entradas estrictas y recuperaciones sin origen previo.
+  for(const nota of [-1,11,'1e1','',null,true])assert.equal((await request('/planilla/evaluacion-global',admin,{cursoMateriaId:1,tipo:'Examen escrito',descripcion:'Entrada inválida',bimestre:1,notas:[{alumnoId:5,nota}]})).status,400);
+  assert.equal((await request('/planilla/cierre-academico/1',admin,{bimestre:0,cerrado:true})).status,400);
+
+  const originalBody={cursoMateriaId:1,tipo:'Examen escrito',descripcion:'Origen validado',fecha:'2026-05-01',bimestre:1,notas:[{alumnoId:6,nota:4}]};
+  assert.equal((await request('/planilla/evaluacion-global',admin,originalBody)).status,200);
+  const original=(await db.query("SELECT id FROM evaluaciones WHERE descripcion='Origen validado'")).rows[0];
+  const recuperacion={...originalBody,descripcion:'Recuperación válida',esAcumulativo:true,evaluacionOrigenId:original.id};
+  assert.equal((await request('/planilla/evaluacion-global',admin,{...recuperacion,fecha:'2026-04-01'})).status,400);
+  assert.equal((await request('/planilla/evaluacion-global',admin,{...recuperacion,notas:[{alumnoId:5,nota:8}]})).status,400);
+  const detalle={alumnoId:6,cursoMateriaId:1,nota:5,notaAnterior:4,descripcion:'Tema corregido',tipo:'Examen escrito',fecha:'2026-05-01',observaciones:'Revisar unidad 1'};
+  {const r=await request('/planilla/evaluacion/'+original.id,admin,detalle,'PATCH');assert.equal(r.status,200,JSON.stringify(await r.json()));}
+  assert.equal((await request('/planilla/evaluacion/'+original.id,admin,detalle,'PATCH')).status,409);
+  assert.equal((await request('/planilla/evaluacion/'+original.id,admin,{...detalle,notaAnterior:5,nota:null,notaConceptual:'EN_PROCESO'},'PATCH')).status,200);
+  const conceptual=(await db.query('SELECT nota,nota_conceptual,observaciones FROM notas WHERE evaluacion_id=$1',[original.id])).rows[0];
+  assert.equal(conceptual.nota,null);assert.equal(conceptual.nota_conceptual,'EN_PROCESO');assert.equal(conceptual.observaciones,'Revisar unidad 1');
+  {const r=await request('/planilla/evaluacion-global',admin,{...recuperacion,fecha:'2026-05-02',notas:[{alumnoId:6,nota:8}]});assert.equal(r.status,200,JSON.stringify(await r.json()));}
+
+  await db.query("INSERT INTO materias(nombre) VALUES ('Materia de cierre')");
+  const materiaCierre=(await db.query("INSERT INTO curso_materia(curso_id,materia_id) SELECT 1,id FROM materias WHERE id NOT IN(SELECT materia_id FROM curso_materia WHERE curso_id=1) LIMIT 1 RETURNING id")).rows[0];
+  if(materiaCierre){
+    const inscritos=(await db.query("SELECT alumno_id FROM alumno_curso ac JOIN usuarios u ON u.id=ac.alumno_id WHERE ac.curso_id=1 AND ac.activo=1 AND u.activo=1")).rows;
+    assert.equal((await request('/planilla/evaluacion-global',admin,{cursoMateriaId:materiaCierre.id,tipo:'Examen escrito',descripcion:'Obligatoria completa',fecha:'2026-06-01',bimestre:1,notas:inscritos.map(a=>({alumnoId:a.alumno_id,nota:8}))})).status,200);
+    assert.equal((await request('/planilla/cierre-academico/'+materiaCierre.id,admin,{bimestre:1,cerrado:true})).status,200);
+    assert.equal((await request('/planilla/evaluacion-global',admin,{cursoMateriaId:materiaCierre.id,tipo:'Examen escrito',descripcion:'Bloqueada',fecha:'2026-06-02',bimestre:1,notas:inscritos.map(a=>({alumnoId:a.alumno_id,nota:8}))})).status,423);
+    assert.equal((await request('/planilla/cierre-academico/'+materiaCierre.id,admin,{bimestre:1,cerrado:false})).status,200);
+  }
+
 });

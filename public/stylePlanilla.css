@@ -673,7 +673,7 @@ tbody tr:hover td:first-child {
   color: var(--ink);
 }
 
-.bim-resumen-valor.desaprobado { color: var(--red); }
+.bim-resumen-valor.en-proceso { color: var(--red); }
 .bim-resumen-valor.aprobado    { color: var(--green-dark); }
 
 .cierre-resumen {
@@ -699,7 +699,7 @@ tbody tr:hover td:first-child {
 }
 
 .cierre-resumen-valor.aprobado    { color: var(--green-dark); }
-.cierre-resumen-valor.desaprobado { color: var(--red); }
+.cierre-resumen-valor.en-proceso { color: var(--red); }
 
 .prom {
   font-weight: 800;
@@ -977,7 +977,7 @@ tbody tr:hover td:first-child {
 }
 
 .leyenda-aprobada { background: var(--green-dark); }
-.leyenda-desaprobada { background: var(--red); }
+.leyenda-en-proceso { background: var(--red); }
 .leyenda-saldada { background: #94a3b8; }
 
 /* Compacta solamente la vista de quienes cargan notas; la vista del alumno no cambia. */
@@ -1082,7 +1082,7 @@ tbody tr:hover td:first-child {
 }
 
 .nota-chip-aprobada { background: var(--green-dark); }
-.nota-chip-desaprobada { background: var(--red); }
+.nota-chip-en-proceso { background: var(--red); }
 .nota-chip-saldada { background: #64748b; }
 .nota-chip-ajuste { background: #2563eb; }
 
@@ -1178,3 +1178,22 @@ tbody tr:hover td:first-child {
     gap: 8px;
   }
 }
+
+/* Planilla con viewport propio: encabezados y scroll accesibles sin bajar al último alumno. */
+.table-scroll{max-height:70dvh;overflow:auto;scrollbar-gutter:stable;overscroll-behavior:contain}
+#tablaPlanilla thead th{position:sticky;top:0;z-index:30;background:var(--brand-navy)}
+#tablaPlanilla thead th:first-child{z-index:35}
+#tablaPlanilla{min-width:0;width:max-content;max-width:none}
+#tablaPlanilla td,#tablaPlanilla th{min-width:120px}
+#tablaPlanilla [data-bimestre]{min-width:200px}
+#tablaPlanilla .bimestre-colapsado{min-width:56px!important;width:56px!important;max-width:56px!important;padding:6px!important}
+.bimestre-colapsado .contenido-bimestre,.bimestre-colapsado>span{display:none}
+.toggle-bimestre{display:block;margin:6px auto 0;padding:5px;border-radius:5px;cursor:pointer}
+.scroll-planilla-fijo{position:fixed;bottom:0;left:16px;right:16px;overflow-x:scroll;overflow-y:hidden;height:22px;z-index:60;background:var(--surface);border-top:1px solid var(--border)}
+.scroll-planilla-fijo>div{height:1px}
+body{padding-bottom:28px}
+.detalle-nota-dialog{margin:auto;max-width:650px;width:94vw;max-height:90dvh;overflow:auto;padding:24px;border:1px solid var(--border);border-radius:12px}
+.detalle-nota-dialog::backdrop{background:#0008}
+.detalle-nota-dialog label{display:block;margin:12px 0}.detalle-nota-dialog input:not([type=checkbox]),.detalle-nota-dialog select,.detalle-nota-dialog textarea{display:block;width:100%;padding:9px;border:1px solid var(--border-strong);border-radius:6px}
+.detalle-nota-dialog button,.control-cierre button{padding:9px;margin:5px;cursor:pointer}.control-cierre{padding:16px;background:var(--surface);margin:16px 0}#detalleError{color:var(--red-dark)}
+@media print{.header,.global-form,.control-cierre,.scroll-planilla-fijo,.toggle-bimestre{display:none!important}.table-scroll{overflow:visible;max-height:none}#tablaPlanilla{width:100%;font-size:9px}thead{display:table-header-group}tr{break-inside:avoid}#tablaPlanilla th,#tablaPlanilla td{position:static;min-width:0} .contenido-bimestre{display:block!important}}

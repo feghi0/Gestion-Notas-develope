@@ -171,7 +171,7 @@ router.get("/excel/:cursoId", authMiddleware, async (req, res) => {
       SELECT
         e.id, e.curso_materia_id, e.bimestre, e.cierre, e.tipo,
         e.descripcion, e.es_acumulativo, e.evaluacion_origen_id,
-        n.alumno_id, n.nota
+        n.alumno_id, n.nota, n.nota_conceptual, n.observaciones, n.revision AS nota_revision
       FROM evaluaciones e
       JOIN notas n ON n.evaluacion_id = e.id
       WHERE e.curso_materia_id IN (?)
@@ -207,7 +207,7 @@ router.get("/excel/:cursoId", authMiddleware, async (req, res) => {
 
     function colorFuente(val) {
       if (val === null || val === undefined) return COLOR.grisVac;
-      if (val === "DESAPROBADO" || val === "PREVIA") return COLOR.rojo6;
+      if (val === "En proceso" || val === "PREVIA") return COLOR.rojo6;
       const n = Number(val);
       if (!isNaN(n) && n < 6)  return COLOR.rojo6;
       if (!isNaN(n) && n >= 6) return COLOR.verde6;
@@ -432,7 +432,7 @@ router.get("/excel/:cursoId", authMiddleware, async (req, res) => {
         const valores = [
           alumno.apellido,
           alumno.nombre,
-          valorNumerico(r.bimestre1Num),   // numérico siempre, nunca "DESAPROBADO"
+          valorNumerico(r.bimestre1Num),   // numérico siempre, nunca "En proceso"
           valorNumerico(r.bimestre2Num),
           valorNumerico(r.cuatrimestre1),
           valorNumerico(r.bimestre3Num),
@@ -477,7 +477,7 @@ router.get("/excel/:cursoId", authMiddleware, async (req, res) => {
       ws.getRow(legendRow).height = 20;
       const cLegend = ws.getCell(`A${legendRow}`);
       cLegend.value = "★ Cuatrimestres y Nota Final se calculan automáticamente. " +
-                      "Notas en ROJO: desaprobado (<6) o PREVIA. Notas en VERDE: aprobado (≥6).";
+                      "Notas en ROJO: en-proceso (<6) o PREVIA. Notas en VERDE: aprobado (≥6).";
       cLegend.font      = { italic: true, size: 8.5, color: { argb: "FF6B7280" }, name: "Calibri" };
       cLegend.fill      = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF9EC" } };
       cLegend.alignment = { wrapText: true, vertical: "middle" };

@@ -7,6 +7,8 @@ const generarPasswordTemporal = require("../lib/temporaryPassword");
 const ExcelJS = require("exceljs");
 const { cursoAbierto } = require("../lib/ciclosLectivos");
 const { calcularResumenMateria } = require("../lib/calculoNotas");
+const reglas = require('../public/reglasAcademicas');
+const { validarRecuperacion, validarCierre, fechaHoy, error: errorAcademico } = require('../lib/validacionAcademica');
 // ─── Helpers de acceso ────────────────────────────────────────────────────────
 
 async function verificarPermisoMateria(conn, cursoMateriaId, user, requiereEscritura = false) {
@@ -102,10 +104,7 @@ async function alumnoEnCurso(conn, alumnoId, cursoMateriaId) {
   return rows && rows.length > 0;
 }
 
-function notaValida(nota) {
-  const n = Number(nota);
-  return !isNaN(n) && isFinite(n) && n >= -1 && n <= 10;
-}
+function notaValida(nota, tipo='') { return !reglas.validarNota(nota,tipo); }
 
 function bimestreValido(b) {
   return [1, 2, 3, 4].includes(Number(b));
@@ -265,12 +264,12 @@ async function limpiarOverridesAlumno(conn, alumnoId, cursoMateriaId) {
 function valorCeldaNota(val) {
   if (!val || val === "-") return null;
   const n = parseFloat(val);
-  return isNaN(n) ? String(val) : n; // número real o texto (DESAPROBADO, PREVIA)
+  return isNaN(n) ? String(val) : n; // número real o texto (En proceso, PREVIA)
 }
 
 function esNotaReprobatoria(val) {
   if (val === null || val === undefined) return false;
-  if (typeof val === "string") return val === "DESAPROBADO" || val === "PREVIA";
+  if (typeof val === "string") return val === "En proceso" || val === "PREVIA";
   return typeof val === "number" && val < 6;
 }
 
@@ -281,6 +280,36 @@ function estiloCeldaNota(val) {
   return null;
 }
 
+async function validarGuardado(req,res,next) {
+ let conn;
+ try {
+  const body=req.body || {}; body.fecha=body.fecha || fechaHoy();
+  if(!reglas.validarFecha(body.fecha))throw errorAcademico('Indicá una fecha válida.');
+  if(body.obligatoria!==undefined && typeof body.obligatoria!=='boolean')throw errorAcademico('La obligatoriedad debe ser verdadera o falsa.');
+  if(req.path.startsWith('/importar/')) {
+    for(const fila of body.filas || [])for(const key of ['b1','b2','b3','b4','c1','c2','cq1','cq2','nf'])
+      if(fila[key]!==undefined&&fila[key]!==null&&fila[key]!==''&&reglas.validarNota(fila[key]))throw errorAcademico(`Nota inválida en ${key}: escala 1 a 10, hasta dos decimales.`);
+    return next();
+  }
+  const lista=body.notas || [{alumnoId:body.alumnoId,nota:body.nota}];
+  if(!Array.isArray(lista)||!lista.length)throw errorAcademico('Indicá al menos una nota.');
+  const alumnos=new Set();
+  for(const n of lista){
+   if(!Number.isSafeInteger(Number(n.alumnoId))||Number(n.alumnoId)<1||alumnos.has(Number(n.alumnoId)))throw errorAcademico('Alumno inválido o repetido.');
+   alumnos.add(Number(n.alumnoId));
+   const mensaje=reglas.validarNota(n.nota,body.tipo);if(mensaje)throw errorAcademico(mensaje);
+  }
+  const cierre=Number(body.numeroCierre || body.cierre || 0);
+  if(body.esAcumulativo || cierre) {
+   const origen=body.evaluacionOrigenId || body.evaluacionId;
+   if(!origen)throw errorAcademico('Seleccioná la evaluación original antes del recuperatorio.');
+   conn=await pool.getConnection();
+   for(const n of lista)await validarRecuperacion(conn,{origenId:origen,alumnoId:n.alumnoId,materiaId:body.cursoMateriaId,fecha:body.fecha,cierre,bimestre:body.bimestre});
+  }
+  next();
+ }catch(err){res.status(err.status||400).json({success:false,error:err.status?err.message:'No pudimos validar la evaluación.'});}
+ finally{if(conn)conn.release();}
+}
 // ─── GET /planilla/plantilla/:cursoMateriaId ───────────────────────────────────
 // Genera y descarga la planilla en formato Excel (.xlsx) con estilos completos.
 // Incluye los alumnos del curso y sus notas actuales (si existen).
@@ -330,7 +359,7 @@ router.get("/plantilla/:cursoMateriaId", authMiddleware, async (req, res) => {
     // Evaluaciones + notas de todos los alumnos
     const evaluaciones = await conn.query(`
       SELECT e.id, e.bimestre, e.cierre, e.tipo, e.es_acumulativo,
-             e.evaluacion_origen_id, n.alumno_id, n.nota
+             e.evaluacion_origen_id, n.alumno_id, n.nota, n.nota_conceptual, n.observaciones, n.revision AS nota_revision
       FROM evaluaciones e
       JOIN notas n ON n.evaluacion_id = e.id
       WHERE e.curso_materia_id = ?
@@ -474,7 +503,7 @@ router.get("/plantilla/:cursoMateriaId", authMiddleware, async (req, res) => {
     const cLegend = ws.getCell(`A${legendRow}`);
     cLegend.value = "★ Cuatrimestres y Nota Final: se calculan automáticamente. " +
                     "Si completás esas columnas al importar, el valor del Excel prevalece sobre el cálculo. " +
-                    "Valores no numéricos (DESAPROBADO, PREVIA, -) se ignoran al importar.";
+                    "Valores no numéricos (En proceso, PREVIA, -) se ignoran al importar.";
     cLegend.font      = { italic: true, size: 9, color: { argb: "FF6B7280" }, name: "Calibri" };
     cLegend.fill      = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF9EC" } };
     cLegend.alignment = { wrapText: true, vertical: "middle" };
@@ -496,7 +525,7 @@ router.get("/plantilla/:cursoMateriaId", authMiddleware, async (req, res) => {
   } catch (err) {
     console.error("Error al generar plantilla Excel:", err);
     if (!res.headersSent) {
-      res.status(500).json({ error: "Error al generar la plantilla" });
+      res.status(err.status || (err.code === "55000" ? 423 : err.code === "23514" ? 400 : 500)).json({ error: "Error al generar la plantilla" });
     }
   } finally {
     if (conn) conn.release();
@@ -505,7 +534,7 @@ router.get("/plantilla/:cursoMateriaId", authMiddleware, async (req, res) => {
 
 // ─── POST /planilla/importar/:cursoMateriaId ───────────────────────────────────
 
-router.post("/importar/:cursoMateriaId", authMiddleware, async (req, res) => {
+router.post("/importar/:cursoMateriaId", authMiddleware, validarGuardado, async (req, res) => {
   const { cursoMateriaId } = req.params;
   const { filas }          = req.body;
   const user               = req.user;
@@ -635,7 +664,7 @@ router.post("/importar/:cursoMateriaId", authMiddleware, async (req, res) => {
                 `INSERT INTO evaluaciones
                    (curso_materia_id, tipo, descripcion, fecha, bimestre, cierre, es_acumulativo, evaluacion_origen_id)
                  VALUES (?, 'Examen escrito', ?, ?, NULL, NULL, 0, NULL)`,
-                [cursoMateriaId, `Import override:${periodo.campo}`, new Date()]
+                [cursoMateriaId, `Import override:${periodo.campo}`, req.body.fecha]
               );
               await conn.query(
                 "INSERT INTO notas (evaluacion_id, alumno_id, nota) VALUES (?, ?, ?)",
@@ -680,14 +709,14 @@ router.post("/importar/:cursoMateriaId", authMiddleware, async (req, res) => {
               `INSERT INTO evaluaciones
                  (curso_materia_id, tipo, descripcion, fecha, bimestre, cierre, es_acumulativo, evaluacion_origen_id)
                VALUES (?, ?, 'Importado desde Excel', ?, ?, NULL, 0, NULL)`,
-              [cursoMateriaId, "Examen escrito", new Date(), periodo.numero]
+              [cursoMateriaId, "Examen escrito", req.body.fecha, periodo.numero]
             );
           } else {
             insertResult = await conn.query(
               `INSERT INTO evaluaciones
                  (curso_materia_id, tipo, descripcion, fecha, bimestre, cierre, es_acumulativo, evaluacion_origen_id)
                VALUES (?, ?, 'Importado desde Excel', ?, NULL, ?, 0, NULL)`,
-              [cursoMateriaId, periodo.tipoEval, new Date(), periodo.numero]
+              [cursoMateriaId, periodo.tipoEval, req.body.fecha, periodo.numero]
             );
           }
 
@@ -696,6 +725,7 @@ router.post("/importar/:cursoMateriaId", authMiddleware, async (req, res) => {
             [Number(insertResult.insertId), alumnoId, nota]
           );
 
+          await conn.query("UPDATE evaluaciones SET alumno_destino_id=? WHERE id=?",[alumnoId,Number(insertResult.insertId)]);
           await conn.commit();
           filaRes.notasImportadas.push(`${periodo.etiqueta}: ${nota}`);
           bimestresImportados++;
@@ -717,7 +747,7 @@ router.post("/importar/:cursoMateriaId", authMiddleware, async (req, res) => {
   } catch (err) {
     if (conn) { try { await conn.rollback(); } catch (_) {} }
     console.error("Error al importar Excel:", err);
-    res.status(500).json({ success: false, error: "Error interno al importar: " + err.message });
+    res.status(err.status || (err.code === "55000" ? 423 : err.code === "23514" ? 400 : 500)).json({ success: false, error: "Error interno al importar: " + err.message });
   } finally {
     if (conn) conn.release();
   }
@@ -725,7 +755,7 @@ router.post("/importar/:cursoMateriaId", authMiddleware, async (req, res) => {
 
 // ─── POST evaluacion-global ───────────────────────────────────────────────────
 
-router.post("/evaluacion-global", authMiddleware, async (req, res) => {
+router.post("/evaluacion-global", authMiddleware, validarGuardado, async (req, res) => {
   const {
     cursoMateriaId, tipo, descripcion, bimestre, notas,
     esAcumulativo, evaluacionOrigenId
@@ -754,7 +784,7 @@ router.post("/evaluacion-global", authMiddleware, async (req, res) => {
     if (!idEnteroValido(n.alumnoId)) {
       return res.status(400).json({ success: false, error: `alumnoId inválido: ${n.alumnoId}` });
     }
-    if (!notaValida(n.nota)) {
+    if (!notaValida(n.nota,tipo)) {
       return res.status(400).json({ success: false, error: `Nota inválida para el alumno ${n.alumnoId} (rango: -1 a 10)` });
     }
   }
@@ -793,7 +823,7 @@ router.post("/evaluacion-global", authMiddleware, async (req, res) => {
       cursoMateriaId,
       tipo ? String(tipo).substring(0, 100) : null,
       String(descripcion).substring(0, 500),
-      new Date(),
+      req.body.fecha,
       bimestre,
       esAcumulativo ? 1 : 0,
       esAcumulativo ? Number(evaluacionOrigenId) : null
@@ -811,13 +841,14 @@ router.post("/evaluacion-global", authMiddleware, async (req, res) => {
       await limpiarOverridesAlumno(conn, n.alumnoId, cursoMateriaId);
     }
 
+    await conn.query("UPDATE evaluaciones SET obligatoria=? WHERE id=?",[req.body.obligatoria!==false,evaluacionId]);
     await conn.commit();
     res.json({ success: true });
 
   } catch (err) {
     if (conn) { try { await conn.rollback(); } catch (_) {} }
     console.error("Error al crear evaluación global:", err);
-    res.status(500).json({ success: false, error: "Error al crear evaluacion global" });
+    res.status(err.status || (err.code === "55000" ? 423 : err.code === "23514" ? 400 : 500)).json({ success: false, error: "Error al crear evaluacion global" });
   } finally {
     if (conn) conn.release();
   }
@@ -828,7 +859,7 @@ router.post("/evaluacion-global", authMiddleware, async (req, res) => {
 // Un cierre puede tener múltiples temas. Cada llamada agrega un tema nuevo.
 // La nota del cierre se calcula en el frontend promediando todos los temas.
 
-router.post("/cierre-global", authMiddleware, async (req, res) => {
+router.post("/cierre-global", authMiddleware, validarGuardado, async (req, res) => {
   const { cursoMateriaId, numeroCierre, descripcion, notas } = req.body;
   const user = req.user;
 
@@ -881,13 +912,13 @@ router.post("/cierre-global", authMiddleware, async (req, res) => {
     const result = await conn.query(`
       INSERT INTO evaluaciones
         (curso_materia_id, tipo, descripcion, fecha, bimestre, cierre, es_acumulativo, evaluacion_origen_id)
-      VALUES (?, ?, ?, ?, NULL, ?, 0, NULL)
+      VALUES (?, ?, ?, ?, NULL, ?, 0, ?)
     `, [
       cursoMateriaId,
       numeroCierre === 1 ? "Cierre Diciembre" : "Cierre Febrero",
       String(descripcion).trim().substring(0, 500),
-      new Date(),
-      Number(numeroCierre)
+      req.body.fecha,
+      Number(numeroCierre),req.body.evaluacionOrigenId
     ]);
 
     const evaluacionId = Number(result.insertId);
@@ -908,7 +939,7 @@ router.post("/cierre-global", authMiddleware, async (req, res) => {
   } catch (err) {
     if (conn) { try { await conn.rollback(); } catch (_) {} }
     console.error("Error al cargar cierre global:", err);
-    res.status(500).json({ success: false, error: "Error al cargar cierre global" });
+    res.status(err.status || (err.code === "55000" ? 423 : err.code === "23514" ? 400 : 500)).json({ success: false, error: "Error al cargar cierre global" });
   } finally {
     if (conn) conn.release();
   }
@@ -916,7 +947,7 @@ router.post("/cierre-global", authMiddleware, async (req, res) => {
 
 // ─── POST evaluacion (individual — solo para compatibilidad) ──────────────────
 
-router.post("/evaluacion", authMiddleware, async (req, res) => {
+router.post("/evaluacion", authMiddleware, validarGuardado, async (req, res) => {
   const {
     alumnoId, cursoMateriaId, tipo, descripcion,
     nota, bimestre, cierre,
@@ -927,7 +958,7 @@ router.post("/evaluacion", authMiddleware, async (req, res) => {
   if (!idEnteroValido(alumnoId) || !idEnteroValido(cursoMateriaId)) {
     return res.status(400).json({ success: false, error: "Datos incompletos o inválidos" });
   }
-  if (!notaValida(nota)) {
+  if (!notaValida(nota,tipo)) {
     return res.status(400).json({ success: false, error: "Nota inválida (rango: -1 a 10)" });
   }
   if (bimestre && !bimestreValido(bimestre)) {
@@ -978,7 +1009,7 @@ router.post("/evaluacion", authMiddleware, async (req, res) => {
       cursoMateriaId,
       tipo        ? String(tipo).substring(0, 100)        : null,
       descripcion ? String(descripcion).substring(0, 500) : null,
-      new Date(),
+      req.body.fecha,
       bimestre            || null,
       cierre              || null,
       esAcumulativo ? 1   : 0,
@@ -992,6 +1023,7 @@ router.post("/evaluacion", authMiddleware, async (req, res) => {
       [evaluacionId, alumnoId, Number(nota)]
     );
 
+    await conn.query("UPDATE evaluaciones SET alumno_destino_id=? WHERE id=?",[alumnoId,evaluacionId]);
     // Al agregar una nota manualmente, resetear overrides del alumno.
     await limpiarOverridesAlumno(conn, alumnoId, cursoMateriaId);
 
@@ -1001,7 +1033,7 @@ router.post("/evaluacion", authMiddleware, async (req, res) => {
   } catch (err) {
     if (conn) { try { await conn.rollback(); } catch (_) {} }
     console.error("Error al guardar evaluación:", err);
-    res.status(500).json({ success: false, error: "Error al guardar evaluación" });
+    res.status(err.status || (err.code === "55000" ? 423 : err.code === "23514" ? 400 : 500)).json({ success: false, error: "Error al guardar evaluación" });
   } finally {
     if (conn) conn.release();
   }
@@ -1039,7 +1071,7 @@ router.delete("/override/:alumnoId", authMiddleware, async (req, res) => {
   } catch (err) {
     if (conn) { try { await conn.rollback(); } catch (_) {} }
     console.error("Error al limpiar overrides:", err);
-    res.status(500).json({ success: false, error: "Error al limpiar overrides" });
+    res.status(err.status || (err.code === "55000" ? 423 : err.code === "23514" ? 400 : 500)).json({ success: false, error: "Error al limpiar overrides" });
   } finally {
     if (conn) conn.release();
   }
@@ -1047,43 +1079,52 @@ router.delete("/override/:alumnoId", authMiddleware, async (req, res) => {
 
 // ─── DELETE evaluacion/:id ────────────────────────────────────────────────────
 
-router.patch("/evaluacion/:id", authMiddleware, async (req, res) => {
-  const { alumnoId, cursoMateriaId, nota, notaAnterior } = req.body || {};
-  const id = Number(req.params.id);
-  const numero = Number(nota);
-  if (![id, Number(alumnoId), Number(cursoMateriaId)].every(n => Number.isSafeInteger(n) && n > 0) ||
-      ![nota, notaAnterior].every(n => (typeof n === "number" || typeof n === "string") && String(n).trim() !== "" && Number.isFinite(Number(n)))) {
-    return res.status(400).json({ success: false, error: "Datos incompletos o inválidos" });
-  }
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    const acceso = await verificarAcceso(conn, cursoMateriaId, req.user, true);
-    if (!acceso.ok) return res.status(acceso.status).json({ success: false, error: acceso.error });
-    if (!await alumnoEnCurso(conn, alumnoId, cursoMateriaId)) {
-      return res.status(403).json({ success: false, error: "El alumno no está inscripto en este curso" });
-    }
-    await conn.beginTransaction();
-    const [actual] = await conn.query(`SELECT n.id, n.nota, e.tipo, e.cierre, e.descripcion
-      FROM notas n JOIN evaluaciones e ON e.id=n.evaluacion_id
-      WHERE e.id=? AND e.curso_materia_id=? AND n.alumno_id=? FOR UPDATE OF n`, [id, cursoMateriaId, alumnoId]);
-    if (!actual) throw Object.assign(new Error("Nota no encontrada en esta materia"), { status: 404 });
-    const participacion = String(actual.tipo || "").toLowerCase().includes("particip");
-    const minimo = participacion ? -1 : Number(actual.cierre) > 0 ? 1 : 0;
-    const maximo = participacion ? 1 : 10;
-    if (numero < minimo || numero > maximo) throw Object.assign(new Error(`La nota debe estar entre ${minimo} y ${maximo}`), { status: 400 });
-    if (Number(actual.nota) !== Number(notaAnterior)) throw Object.assign(new Error("La nota cambió mientras la editabas. Actualizá la planilla e intentá nuevamente."), { status: 409 });
-    if (numero !== Number(actual.nota)) {
-      await conn.query("UPDATE notas SET nota=? WHERE id=?", [numero, actual.id]);
-      if (!String(actual.descripcion || "").startsWith("Import override:")) await limpiarOverridesAlumno(conn, alumnoId, cursoMateriaId);
-    }
-    await conn.commit();
-    res.json({ success: true });
-  } catch (err) {
-    if (conn) await conn.rollback().catch(() => {});
-    console.error("Error al editar nota:", err.code || err.status);
-    res.status(err.status || (err.code === "55000" ? 423 : 500)).json({ success: false, error: err.status ? err.message : err.code === "55000" ? "El ciclo está cerrado" : "No pudimos guardar la nota" });
-  } finally { if (conn) conn.release(); }
+router.patch('/evaluacion/:id',authMiddleware,async(req,res)=>{
+ const body=req.body||{}, evaluacionId=Number(req.params.id),alumnoId=Number(body.alumnoId),materiaId=Number(body.cursoMateriaId);
+ let conn;
+ try{
+  if(![evaluacionId,alumnoId,materiaId].every(n=>Number.isSafeInteger(n)&&n>0))throw errorAcademico('Identificadores inválidos.');
+  conn=await pool.getConnection();const acceso=await verificarAcceso(conn,materiaId,req.user,true);
+  if(!acceso.ok)throw errorAcademico(acceso.error,acceso.status);
+  if(!await alumnoEnCurso(conn,alumnoId,materiaId))throw errorAcademico('Alumno no inscripto.',403);
+  await conn.beginTransaction();
+  const [actual]=await conn.query(`SELECT e.*,n.id AS nota_id,n.nota,n.nota_conceptual,n.observaciones,n.revision AS nota_revision FROM evaluaciones e
+   JOIN notas n ON n.evaluacion_id=e.id WHERE e.id=? AND e.curso_materia_id=? AND n.alumno_id=? FOR UPDATE OF e,n`,[evaluacionId,materiaId,alumnoId]);
+  if(!actual)throw errorAcademico('Nota no encontrada.',404);
+  if(body.notaAnterior!==actual.nota && !(actual.nota!=null && body.notaAnterior!=null && Number(body.notaAnterior)===Number(actual.nota)))throw errorAcademico('La nota cambió. Actualizá la planilla.',409);
+  if(body.notaRevision!==undefined&&Number(body.notaRevision)!==actual.nota_revision)throw errorAcademico('El detalle cambió. Actualizá la planilla.',409);
+  if(body.evaluacionRevision!==undefined&&Number(body.evaluacionRevision)!==actual.revision)throw errorAcademico('La evaluación fue modificada por otra persona.',409);
+  const tipo=body.tipo ?? actual.tipo,descripcion=body.descripcion ?? actual.descripcion,fecha=body.fecha ?? actual.fecha;
+  const bimestre=body.bimestre===undefined?actual.bimestre:Number(body.bimestre),cierre=Number(actual.cierre||0);
+  if(typeof descripcion!=='string'||!descripcion.trim()||descripcion.length>500||typeof tipo!=='string'||!tipo.trim()||tipo.length>100||!reglas.validarFecha(fecha))throw errorAcademico('Completá tema, tipo y fecha válidos.');
+  if(!cierre&&!bimestreValido(bimestre))throw errorAcademico('Bimestre inválido.');
+  if(body.obligatoria!==undefined&&typeof body.obligatoria!=='boolean')throw errorAcademico('Obligatoriedad inválida.');
+  const conceptual=body.notaConceptual===undefined?null:body.notaConceptual;
+  if(conceptual!==null&&conceptual!=='EN_PROCESO')throw errorAcademico('Estado conceptual inválido.');
+  if(conceptual && (reglas.esParticipacion(tipo)||body.nota!==null))throw errorAcademico('La nota conceptual no admite un valor numérico ni participación.');
+  if(!conceptual){const mensaje=reglas.validarNota(body.nota,tipo);if(mensaje)throw errorAcademico(mensaje);}
+  const observaciones=body.observaciones ?? actual.observaciones;
+  if(typeof observaciones!=='string'||observaciones.length>2000)throw errorAcademico('Las observaciones admiten hasta 2000 caracteres.');
+  if(actual.evaluacion_origen_id)await validarRecuperacion(conn,{origenId:actual.evaluacion_origen_id,alumnoId,materiaId,fecha,cierre,bimestre});
+  await conn.query('UPDATE evaluaciones SET descripcion=?,tipo=?,fecha=?,bimestre=?,obligatoria=? WHERE id=?',[descripcion.trim(),tipo,fecha,bimestre,body.obligatoria ?? actual.obligatoria,evaluacionId]);
+  await conn.query('UPDATE notas SET nota=?,nota_conceptual=?,observaciones=? WHERE id=?',[conceptual?null:Number(body.nota),conceptual,observaciones,actual.nota_id]);
+  if(!String(actual.descripcion||'').startsWith('Import override:'))await limpiarOverridesAlumno(conn,alumnoId,materiaId);
+  await conn.commit();res.json({success:true});
+ }catch(err){if(conn)await conn.rollback().catch(()=>{});res.status(err.status||(err.code==='55000'?423:err.code==='23514'?400:500)).json({success:false,error:err.status||['55000','23514'].includes(err.code)?err.message:'No pudimos guardar el detalle.'});}
+ finally{if(conn)conn.release();}
+});
+
+router.post('/cierre-academico/:cursoMateriaId',authMiddleware,async(req,res)=>{
+ let conn;try{
+  const materiaId=Number(req.params.cursoMateriaId),bimestre=Number(req.body?.bimestre),cerrado=req.body?.cerrado;
+  if(!Number.isSafeInteger(materiaId)||materiaId<1||!Number.isInteger(bimestre)||bimestre<0||bimestre>4||typeof cerrado!=='boolean')throw errorAcademico('Instancia de cierre inválida.');
+  conn=await pool.getConnection();const acceso=await verificarAcceso(conn,materiaId,req.user,true);if(!acceso.ok)throw errorAcademico(acceso.error,acceso.status);
+  await conn.beginTransaction();await conn.query('SELECT pg_advisory_xact_lock(842615,?)',[materiaId]);
+  if(cerrado)await validarCierre(conn,materiaId,bimestre);
+  await conn.query(`INSERT INTO cierres_academicos(curso_materia_id,bimestre,cerrado,actor_id) VALUES(?,?,?,?)
+   ON CONFLICT(curso_materia_id,bimestre) DO UPDATE SET cerrado=EXCLUDED.cerrado,actor_id=EXCLUDED.actor_id,actualizado_en=clock_timestamp()`,[materiaId,bimestre,cerrado,req.user.id]);
+  await conn.commit();res.json({success:true});
+ }catch(err){if(conn)await conn.rollback().catch(()=>{});res.status(err.status||500).json({success:false,error:err.status?err.message:'No pudimos cambiar el cierre.'});}finally{if(conn)conn.release();}
 });
 
 router.delete("/evaluacion/:id", authMiddleware, async (req, res) => {
@@ -1137,17 +1178,17 @@ router.delete("/evaluacion/:id", authMiddleware, async (req, res) => {
   } catch (err) {
     if (conn) { try { await conn.rollback(); } catch (_) {} }
     console.error("Error al eliminar evaluación:", err);
-    res.status(500).json({ success: false, error: "Error al eliminar evaluación" });
+    res.status(err.status || (err.code === "55000" ? 423 : err.code === "23514" ? 400 : 500)).json({ success: false, error: "Error al eliminar evaluación" });
   } finally {
     if (conn) conn.release();
   }
 });
 // ─── PATCH cierre-tema ────────────────────────────────────────────────────────
 // Actualiza la nota de un tema de diciembre para un alumno específico.
-// Se usa en febrero: el profesor selecciona un tema desaprobado de diciembre
+// Se usa en febrero: el profesor selecciona un tema en-proceso de diciembre
 // y carga la nueva nota. La nota se guarda sobre la fila existente en `notas`.
 
-router.patch("/cierre-tema", authMiddleware, async (req, res) => {
+router.patch("/cierre-tema", authMiddleware, validarGuardado, async (req, res) => {
   const { evaluacionId, alumnoId, cursoMateriaId, nota, numeroCierre } = req.body;
   const user = req.user;
 
@@ -1204,7 +1245,7 @@ router.patch("/cierre-tema", authMiddleware, async (req, res) => {
       cursoMateriaId,
       labelCierre,
       descripcion,
-      new Date(),
+      req.body.fecha,
       Number(numeroCierre),
       evaluacionId   // referencia a la evaluación origen
     ]);
@@ -1225,7 +1266,7 @@ router.patch("/cierre-tema", authMiddleware, async (req, res) => {
   } catch (err) {
     if (conn) { try { await conn.rollback(); } catch (_) {} }
     console.error("Error al registrar nota de cierre:", err);
-    res.status(500).json({ success: false, error: "Error al registrar nota de cierre" });
+    res.status(err.status || (err.code === "55000" ? 423 : err.code === "23514" ? 400 : 500)).json({ success: false, error: "Error al registrar nota de cierre" });
   } finally {
     if (conn) conn.release();
   }
@@ -1262,7 +1303,7 @@ router.get("/historial/:cursoMateriaId", authMiddleware, async (req, res) => {
     res.json({ success: true, historial, siguiente: rows.length > 50 ? String(historial.at(-1).id) : null });
   } catch (err) {
     console.error("Error al consultar historial:", err.code);
-    res.status(500).json({ success: false, error: "No pudimos consultar el historial" });
+    res.status(err.status || (err.code === "55000" ? 423 : err.code === "23514" ? 400 : 500)).json({ success: false, error: "No pudimos consultar el historial" });
   } finally {
     if (conn) conn.release();
   }
@@ -1313,8 +1354,8 @@ router.get("/:cursoMateriaId/:usuarioId", authMiddleware, async (req, res) => {
       evaluaciones = await conn.query(`
         SELECT
           e.id, e.tipo, e.descripcion, e.fecha, e.bimestre, e.cierre,
-          e.es_acumulativo, e.evaluacion_origen_id,
-          n.alumno_id, n.nota
+          e.es_acumulativo, e.evaluacion_origen_id, e.obligatoria, e.alumno_destino_id, e.revision AS evaluacion_revision,
+          n.alumno_id, n.nota, n.nota_conceptual, n.observaciones, n.revision AS nota_revision
         FROM evaluaciones e
         INNER JOIN notas n ON e.id = n.evaluacion_id
         WHERE e.curso_materia_id = ? AND n.alumno_id = ?
@@ -1333,8 +1374,8 @@ router.get("/:cursoMateriaId/:usuarioId", authMiddleware, async (req, res) => {
       evaluaciones = await conn.query(`
         SELECT
           e.id, e.tipo, e.descripcion, e.fecha, e.bimestre, e.cierre,
-          e.es_acumulativo, e.evaluacion_origen_id,
-          n.alumno_id, n.nota
+          e.es_acumulativo, e.evaluacion_origen_id, e.obligatoria, e.alumno_destino_id, e.revision AS evaluacion_revision,
+          n.alumno_id, n.nota, n.nota_conceptual, n.observaciones, n.revision AS nota_revision
         FROM evaluaciones e
         INNER JOIN notas n ON e.id = n.evaluacion_id
         WHERE e.curso_materia_id = ?
@@ -1349,12 +1390,13 @@ router.get("/:cursoMateriaId/:usuarioId", authMiddleware, async (req, res) => {
       user:    { id: user.id, permiso: user.permiso, rango: user.rango },
       materia: materia[0],
       alumnos,
+      cierres: await conn.query("SELECT bimestre,cerrado FROM cierres_academicos WHERE curso_materia_id=?",[cursoMateriaId]),
       notas:   evaluaciones
     });
 
   } catch (err) {
     console.error("Error al cargar planilla:", err);
-    res.status(500).json({ success: false, error: "Error al cargar planilla" });
+    res.status(err.status || (err.code === "55000" ? 423 : err.code === "23514" ? 400 : 500)).json({ success: false, error: "Error al cargar planilla" });
   } finally {
     if (conn) conn.release();
   }

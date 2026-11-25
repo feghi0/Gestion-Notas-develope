@@ -13,193 +13,18 @@ if (!localStorage.getItem("token")) {
   location.href = "index.html";
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function esParticipacion(tipo) {
-  return (tipo || "").toLowerCase().includes("particip");
-}
-
-function esCierre(ev) {
-  const c = Number(ev.cierre);
-  return c === 1 || c === 2;
-}
-
-function esImportadoExcel(ev) {
-  return String(ev.descripcion || "").trim() === "Importado desde Excel";
-}
-
-function esOverrideImport(ev, campo) {
-  return String(ev.descripcion || "").trim() === `Import override:${campo}`;
-}
-
-function ultimaNota(lista) {
-  if (!lista || lista.length === 0) return null;
-  const last = lista.reduce((a, b) => Number(a.id) > Number(b.id) ? a : b);
-  return Number(last.nota);
-}
-
-function notaImportadaBimestre(evaluacionesAlumno, num) {
-  return ultimaNota(evaluacionesAlumno.filter(e =>
-    esImportadoExcel(e) && Number(e.bimestre) === Number(num) && !esCierre(e)
-  ));
-}
-
-function notaOverrideCampo(evaluacionesAlumno, campo) {
-  return ultimaNota(evaluacionesAlumno.filter(e => esOverrideImport(e, campo)));
-}
-
-function formatearNotaNum(n) {
-  return Number(n).toFixed(2);
-}
-
-function puedeEscribir() {
-  return !cicloSoloLectura && (permiso === "escritura" || permiso === "ambos");
-}
-
-function esVistaDocente() {
-  return rango === "profesor";
-}
-
-// ─── Lógica de acumulativos ───────────────────────────────────────────────────
-
-function calcularSaldadas(evaluacionesAlumno) {
-  const saldadas  = new Set();
-  const notaPorId = new Map();
-
-  for (const ev of evaluacionesAlumno) {
-    notaPorId.set(Number(ev.id), Number(ev.nota));
-  }
-  for (const ev of evaluacionesAlumno) {
-    if (Number(ev.es_acumulativo) === 1 && ev.evaluacion_origen_id != null) {
-      if (Number(ev.nota) >= 6) {
-        const origenId   = Number(ev.evaluacion_origen_id);
-        const notaOrigen = notaPorId.get(origenId);
-        if (notaOrigen !== undefined && notaOrigen < 6) {
-          saldadas.add(origenId);
-        }
-      }
-    }
-  }
-
-  for (const num of [1, 2, 3, 4]) {
-    const imp = notaImportadaBimestre(evaluacionesAlumno, num);
-    if (imp === null || imp < 6) continue;
-    for (const ev of evaluacionesAlumno) {
-      if (esImportadoExcel(ev)) continue;
-      if (esCierre(ev) || esParticipacion(ev.tipo)) continue;
-      if (Number(ev.bimestre) !== num) continue;
-      if (Number(ev.nota) < 6) saldadas.add(Number(ev.id));
-    }
-  }
-
-  return saldadas;
-}
-
-function calcularBimestre(evaluacionesAlumno, num) {
-  const importada = notaImportadaBimestre(evaluacionesAlumno, num);
-  if (importada !== null) return formatearNotaNum(importada);
-
-  const evaluaciones = evaluacionesAlumno.filter(
-    e => Number(e.bimestre) === Number(num) && !esCierre(e)
-  );
-  if (evaluaciones.length === 0) return "-";
-
-  const saldadas        = calcularSaldadas(evaluacionesAlumno);
-  const participaciones = evaluaciones.filter(e =>  esParticipacion(e.tipo));
-  const normales        = evaluaciones.filter(e => !esParticipacion(e.tipo));
-
-  for (const saldada of normales.filter(e => saldadas.has(Number(e.id)))) {
-    const acumulativa = evaluacionesAlumno.find(
-      e =>
-        Number(e.es_acumulativo) === 1 &&
-        Number(e.evaluacion_origen_id) === Number(saldada.id) &&
-        Number(e.nota) >= 6
-    );
-    if (acumulativa && Number(acumulativa.bimestre) !== Number(num)) {
-      return "DESAPROBADO";
-    }
-  }
-
-  const paraPromedio = normales.filter(e => !saldadas.has(Number(e.id)));
-  if (paraPromedio.some(e => Number(e.nota) < 6)) return "DESAPROBADO";
-  if (paraPromedio.length === 0 && participaciones.length === 0) return "-";
-
-  const promedioBase = paraPromedio.length > 0
-    ? paraPromedio.reduce((s, e) => s + Number(e.nota), 0) / paraPromedio.length
-    : 0;
-  const ajuste = participaciones.reduce((s, e) => s + Number(e.nota), 0);
-  return (promedioBase + ajuste).toFixed(2);
-}
-
-function calcularBimestreEfectivo(evaluacionesAlumno, num) {
-  const importada = notaImportadaBimestre(evaluacionesAlumno, num);
-  if (importada !== null) return formatearNotaNum(importada);
-
-  const evaluaciones = evaluacionesAlumno.filter(
-    e => Number(e.bimestre) === Number(num) && !esCierre(e)
-  );
-  if (evaluaciones.length === 0) return "-";
-
-  const saldadas        = calcularSaldadas(evaluacionesAlumno);
-  const participaciones = evaluaciones.filter(e =>  esParticipacion(e.tipo));
-  const normales        = evaluaciones.filter(e => !esParticipacion(e.tipo));
-  const paraPromedio    = normales.filter(e => !saldadas.has(Number(e.id)));
-
-  if (paraPromedio.some(e => Number(e.nota) < 6)) return "DESAPROBADO";
-  if (paraPromedio.length === 0 && participaciones.length === 0) return "-";
-
-  const promedioBase = paraPromedio.length > 0
-    ? paraPromedio.reduce((s, e) => s + Number(e.nota), 0) / paraPromedio.length
-    : 0;
-  const ajuste = participaciones.reduce((s, e) => s + Number(e.nota), 0);
-  return (promedioBase + ajuste).toFixed(2);
-}
-
-function calcularCuatrimestre(evaluacionesAlumno, b1, b2) {
-  const campo = Number(b1) === 1 ? "cq1" : "cq2";
-  const override = notaOverrideCampo(evaluacionesAlumno, campo);
-  if (override !== null) return formatearNotaNum(override);
-
-  const ef1 = calcularBimestreEfectivo(evaluacionesAlumno, b1);
-  const ef2 = calcularBimestreEfectivo(evaluacionesAlumno, b2);
-  if (ef1 === "DESAPROBADO" || ef2 === "DESAPROBADO") return "DESAPROBADO";
-  const nums = [ef1, ef2].filter(n => n !== "-").map(Number);
-  if (nums.length === 0) return "-";
-  return (nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(2);
-}
-
-function necesitaCierres(cuat1, cuat2) {
-  if (cuat1 === "DESAPROBADO" || cuat2 === "DESAPROBADO") return true;
-  const nums = [cuat1, cuat2].filter(n => n !== "-").map(Number);
-  if (nums.length === 0) return false;
-  return nums.reduce((a, b) => a + b, 0) / nums.length < 6;
-}
-
-function estadoCierre1(evaluacionesAlumno) {
-  const temas = evaluacionesAlumno.filter(e => Number(e.cierre) === 1);
-  if (temas.length === 0) return null;
-  const desaprobados = temas.filter(e => Number(e.nota) < 6);
-  const prom = temas.reduce((s, e) => s + Number(e.nota), 0) / temas.length;
-  return { temas, aprobado: desaprobados.length === 0, promedio: parseFloat(prom.toFixed(2)), desaprobados };
-}
-
-function estadoCierre2(evaluacionesAlumno) {
-  const temas = evaluacionesAlumno.filter(e => Number(e.cierre) === 2);
-  if (temas.length === 0) return null;
-  const desaprobados = temas.filter(e => Number(e.nota) < 6);
-  const prom = temas.reduce((s, e) => s + Number(e.nota), 0) / temas.length;
-  return { temas, aprobado: desaprobados.length === 0, promedio: parseFloat(prom.toFixed(2)), desaprobados };
-}
-
+const { esParticipacion,esCierre,esImportadoExcel,esOverrideImport,ultimaNota,notaImportadaBimestre,notaOverrideCampo,formatearNotaNum,calcularSaldadas,calcularBimestre,calcularBimestreNumerico,calcularBimestreEfectivo,calcularCuatrimestre,necesitaCierres,estadoCierre1,estadoCierre2,calcularResumenMateria } = CalculoNotas;
+function puedeEscribir(){return !cicloSoloLectura && ["regente","profesor"].includes(rango) && ["escritura","ambos"].includes(permiso);}
+function esVistaDocente(){return rango === "profesor";}
 // ─── Renders ──────────────────────────────────────────────────────────────────
 
 function renderResumenBimestre(prom) {
-  const esDesap = prom === "DESAPROBADO";
+  const esDesap = prom === "En proceso";
   const esVacio = prom === "-";
   const numVal  = parseFloat(prom);
-  // Desaprobado si es el string "DESAPROBADO" o si el número es < 6
+  // En proceso si es el string "En proceso" o si el número es < 6
   const esMalo  = esDesap || (!esVacio && !isNaN(numVal) && numVal < 6);
-  const clase   = esMalo ? "desaprobado" : (!esVacio ? "aprobado" : "");
+  const clase   = esMalo ? "en-proceso" : (!esVacio ? "aprobado" : "");
   return `
     <div class="bim-resumen">
       <div class="bim-resumen-label">Promedio bimestre</div>
@@ -209,10 +34,10 @@ function renderResumenBimestre(prom) {
 
 function renderResumenCierreHTML(estado) {
   if (!estado) return "";
-  const clase = estado.aprobado ? "aprobado" : "desaprobado";
+  const clase = estado.aprobado ? "aprobado" : "en-proceso";
   const texto = estado.aprobado
     ? `${estado.promedio.toFixed(2)} — Aprobado`
-    : `${estado.promedio.toFixed(2)} — Desaprobado`;
+    : `${estado.promedio.toFixed(2)} — En proceso`;
   return `
     <div class="cierre-resumen">
       <div class="cierre-resumen-label">Resultado cierre</div>
@@ -227,7 +52,7 @@ function renderNotaCompacta(ev, alumno, { saldada = false } = {}) {
 
   if (saldada) claseNota += " nota-chip-saldada";
   else if (participacion) claseNota += " nota-chip-ajuste";
-  else if (nota < 6) claseNota += " nota-chip-desaprobada";
+  else if (nota < 6) claseNota += " nota-chip-en-proceso";
   else claseNota += " nota-chip-aprobada";
 
   const marcaAcumulativa = Number(ev.es_acumulativo) === 1
@@ -237,8 +62,8 @@ function renderNotaCompacta(ev, alumno, { saldada = false } = {}) {
   const notaHTML = puedeEscribir()
     ? `<button type="button" class="${claseNota}"
         onclick="editarNota(this, ${Number(ev.id)}, ${Number(alumno.id)})"
-        title="Editar nota" aria-label="Editar nota ${escHTML(ev.nota)}">${escHTML(ev.nota)}</button>`
-    : `<span class="${claseNota} nota-chip-estatico" aria-label="Nota ${escHTML(ev.nota)}">${escHTML(ev.nota)}</span>`;
+        title="Editar nota" aria-label="Editar nota ${escHTML(ev.nota_conceptual ? "En proceso" : ev.nota)}">${escHTML(ev.nota_conceptual ? "En proceso" : ev.nota)}</button>`
+    : `<span class="${claseNota} nota-chip-estatico" aria-label="Nota ${escHTML(ev.nota_conceptual ? "En proceso" : ev.nota)}">${escHTML(ev.nota_conceptual ? "En proceso" : ev.nota)}</span>`;
   const eliminarHTML = puedeEscribir()
     ? `<button type="button" class="eval-eliminar-mini"
         onclick="eliminarEvaluacion(${Number(ev.id)}, ${Number(alumno.id)})"
@@ -314,10 +139,10 @@ function renderBimestre(evaluacionesAlumno, alumno, num) {
 
     const badgeAcum = esAcum ? `<span class="eval-acum-badge">Acumulativa</span><br>` : "";
     html += `
-      <div class="${claseEval}">
+      <div class="${claseEval}" data-evaluacion="${ev.id}" data-alumno="${alumno.id}">
         <div class="eval-top">
           <span class="eval-tipo">${esPartic ? "Valoración" : escHTML(ev.tipo || "Evaluación")}</span>
-          <span class="${claseNota}">${escHTML(ev.nota)}</span>
+          <span class="${claseNota}">${escHTML(ev.nota_conceptual ? "En proceso" : ev.nota)}</span>
         </div>
         ${badgeAcum}
         <div class="eval-desc">${escHTML(ev.descripcion)}</div>
@@ -342,10 +167,10 @@ function renderCeldaCierre1(evaluacionesAlumno, alumno, habilitado) {
     const nota      = Number(ev.nota);
     const claseNota = nota >= 6 ? "eval-nota" : "eval-nota eval-nota-roja";
     html += `
-      <div class="eval">
+      <div class="eval" data-evaluacion="${ev.id}" data-alumno="${alumno.id}">
         <div class="eval-top">
           <span class="eval-tipo">${escHTML(ev.descripcion || "Tema")}</span>
-          <span class="${claseNota}">${escHTML(ev.nota)}</span>
+          <span class="${claseNota}">${escHTML(ev.nota_conceptual ? "En proceso" : ev.nota)}</span>
         </div>
         <span class="eval-cierre-badge dic">Diciembre</span>
       </div>`;
@@ -370,10 +195,10 @@ function renderCeldaCierre2(evaluacionesAlumno, alumno, habilitado) {
       const nota      = Number(ev.nota);
       const claseNota = nota >= 6 ? "eval-nota" : "eval-nota eval-nota-roja";
       html += `
-        <div class="eval">
+        <div class="eval" data-evaluacion="${ev.id}" data-alumno="${alumno.id}">
           <div class="eval-top">
             <span class="eval-tipo">${escHTML(ev.descripcion || "Tema")}</span>
-            <span class="${claseNota}">${escHTML(ev.nota)}</span>
+            <span class="${claseNota}">${escHTML(ev.nota_conceptual ? "En proceso" : ev.nota)}</span>
           </div>
           <span class="eval-cierre-badge feb">Febrero</span>
         </div>`;
@@ -454,37 +279,8 @@ async function cargar() {
         }
       }
 
-      const nfOverride = notaOverrideCampo(evAlumno, "nf");
-      let final;
+      const final = calcularResumenMateria(evAlumno).notaFinal;
       let claseNotaFinal = "prom";
-
-      if (nfOverride !== null) {
-        final = formatearNotaNum(nfOverride);
-      } else if (estadoFeb) {
-        final = estadoFeb.aprobado ? estadoFeb.promedio.toFixed(2) : "PREVIA";
-      } else if (estadoDic) {
-        // Solo dar nota final si todos los adeudados ya tienen evaluación en diciembre
-        // (no quedan pendientes sin evaluar)
-        const evaluadosEnDic2 = new Set(
-          evAlumno
-            .filter(e => Number(e.cierre) === 1 && e.evaluacion_origen_id != null)
-            .map(e => Number(e.evaluacion_origen_id))
-        );
-        const adeudadosTotales = temasAdeudados(evAlumno).filter(e => !esCierre(e));
-        const quedanPendientes = adeudadosTotales.some(e => !evaluadosEnDic2.has(Number(e.id)));
-        if (!quedanPendientes && estadoDic.aprobado) {
-          final = estadoDic.promedio.toFixed(2);
-        } else {
-          final = "-";
-        }
-      } else if (!habilitarCierres) {
-        const nums = [cuat1, cuat2].filter(n => n !== "-" && n !== "DESAPROBADO").map(Number);
-        final = nums.length > 0
-          ? (nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(2)
-          : "-";
-      } else {
-        final = "-";
-      }
 
       if (final === "PREVIA") claseNotaFinal += " nota-previa";
 
@@ -498,11 +294,11 @@ async function cargar() {
       row.dataset.nombre = `${alumno.apellido || ""} ${alumno.nombre || ""}`;
       row.innerHTML = `
         <td><span class="alumno-planilla-nombre">${escHTML(alumno.apellido)}, ${escHTML(alumno.nombre)}</span></td>
-        <td>${renderBimestre(evAlumno, alumno, 1)}</td>
-        <td>${renderBimestre(evAlumno, alumno, 2)}</td>
+        <td data-bimestre="1"><div class="contenido-bimestre">${renderBimestre(evAlumno, alumno, 1)}</div></td>
+        <td data-bimestre="2"><div class="contenido-bimestre">${renderBimestre(evAlumno, alumno, 2)}</div></td>
         ${renderCeldaCalculada(cuat1, ovCq1, alumno.id)}
-        <td>${renderBimestre(evAlumno, alumno, 3)}</td>
-        <td>${renderBimestre(evAlumno, alumno, 4)}</td>
+        <td data-bimestre="3"><div class="contenido-bimestre">${renderBimestre(evAlumno, alumno, 3)}</div></td>
+        <td data-bimestre="4"><div class="contenido-bimestre">${renderBimestre(evAlumno, alumno, 4)}</div></td>
         ${renderCeldaCalculada(cuat2, ovCq2, alumno.id)}
         ${renderCeldaCierre1(evAlumno, alumno, habilitarCierres)}
         ${renderCeldaCierre2(evAlumno, alumno, habFeb)}
@@ -512,6 +308,7 @@ async function cargar() {
     }
 
     filtrarAlumnos();
+    window.actualizarUXPlanilla?.(data);
 
     if (puedeEscribir()) {
       renderFormularioCierres(alumnosParaDic, alumnosParaFeb);
@@ -599,7 +396,7 @@ async function liberarOverride(alumnoId) {
 }
 
 function renderCeldaCalculada(valor, tieneOverride, alumnoId, extraClase = "") {
-  const esDesap = valor === "DESAPROBADO";
+  const esDesap = valor === "En proceso";
   const estilo  = esDesap ? ' style="color:#dc2626;font-weight:bold;"' : "";
   const btn     = (tieneOverride && puedeEscribir())
     ? `<button class="btn-liberar-override" title="Liberar nota fija (volver al cálculo automático)"
@@ -675,6 +472,7 @@ async function guardarGlobal() {
     }
   }
 
+  if(!ReglasAcademicas.validarFecha(document.getElementById('globalFecha').value)){mostrarMensaje('Indicá una fecha válida.','error');return;}
   const notas = [];
   for (const alumno of alumnosGlobales) {
     const notaInput = document.getElementById(`nota-${alumno.id}`);
@@ -685,8 +483,11 @@ async function guardarGlobal() {
       if (valor === 0) continue;
       if      (tipo.includes("+1"))   valor =  1;
       else if (tipo.includes("+0.5")) valor =  0.5;
-      else if (tipo.includes("-0.5")) valor = -0.5;
+      else if (tipo.includes("-0.5")) valor = 0.5;
     }
+    const errorNota=ReglasAcademicas.validarNota(valor,tipo);
+    if(errorNota){notaInput.setCustomValidity(errorNota);notaInput.reportValidity();return;}
+    if(esAcumulativo){const origen=evaluacionesGlobal.find(e=>Number(e.id)===evaluacionOrigenId&&Number(e.alumno_id)===Number(alumno.id));const errorOrigen=ReglasAcademicas.puedeRecuperar(origen,alumno.id,document.getElementById('globalFecha').value,0,Number(bimestre));if(errorOrigen){mostrarMensaje(errorOrigen,'error');return;}}
     notas.push({ alumnoId: alumno.id, nota: valor });
   }
 
@@ -695,7 +496,7 @@ async function guardarGlobal() {
   try {
     const res = await apiFetch("/planilla/evaluacion-global", {
       method: "POST",
-      body: JSON.stringify({ cursoMateriaId, descripcion, tipo, bimestre, notas, esAcumulativo, evaluacionOrigenId })
+      body: JSON.stringify({ cursoMateriaId, descripcion, tipo, bimestre, notas, esAcumulativo, evaluacionOrigenId,fecha:document.getElementById('globalFecha').value,obligatoria:document.getElementById('globalObligatoria').checked })
     });
     if (!res) return;
     if (!res.ok) { const err = await res.json(); mostrarMensaje(err.error || "No se pudo eliminar esa evaluación. Probá de nuevo.", "error"); return; }
@@ -1177,7 +978,7 @@ const fila = { apellido, nombre, dni };
       if (v === null || v === undefined || v === "") { fila[key] = null; continue; }
 
       const s = String(v).trim().toUpperCase();
-      if (["-", "DESAPROBADO", "PREVIA", "N/A", ""].includes(s)) { fila[key] = null; continue; }
+      if (["-", "En proceso", "PREVIA", "N/A", ""].includes(s)) { fila[key] = null; continue; }
 
       const n = Number(v);
       fila[key] = (!isNaN(n) && n >= 0 && n <= 10) ? n : null;
@@ -1374,8 +1175,8 @@ document.getElementById("globalTipo").addEventListener("change", actualizarInput
 cargar();
 initAyuda({
   porRol: {
-    profesor: "Cargá notas con 'Carga global de notas' para todo el curso de una vez. Si un alumno desaprobó un tema y después lo recuperó, tildá 'evaluación acumulativa' y elegí la nota vieja: el sistema la reemplaza sin borrar el historial. Los 'Cierres administrativos' aparecen solos cuando un alumno necesita rendir en diciembre o febrero.",
-    alumno: "Cada columna es un período del año. 'DESAPROBADO' significa que ese período no se aprobó. 'PREVIA' quiere decir que hay que rendir la materia fuera de las fechas normales.",
+    profesor: "Cargá notas con 'Carga global de notas' para todo el curso de una vez. Si un alumno tiene en proceso un tema y después lo recuperó, tildá 'evaluación acumulativa' y elegí la nota vieja: el sistema la reemplaza sin borrar el historial. Los 'Cierres administrativos' aparecen solos cuando un alumno necesita rendir en diciembre o febrero.",
+    alumno: "Cada columna es un período del año. 'En proceso' significa que ese período no se aprobó. 'PREVIA' quiere decir que hay que rendir la materia fuera de las fechas normales.",
     regente: "Podés cargar o solo mirar notas según tu permiso. Las columnas de 'Cierre' se completan solas cuando un alumno necesita una instancia de recuperación en diciembre o febrero.",
     preceptor: "Esta es la planilla completa de la materia, solo para consultar. No podés cargar ni cambiar ninguna nota desde acá."
   }

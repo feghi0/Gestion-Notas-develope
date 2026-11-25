@@ -33,7 +33,7 @@ router.get('/curso/:id', async (req, res) => {
     const alumnos = await conn.query(`SELECT u.id,u.nombre,u.apellido FROM alumno_curso ac JOIN usuarios u ON u.id=ac.alumno_id
       WHERE ac.curso_id=? AND (? OR (ac.activo=1 AND u.activo=1)) ORDER BY u.apellido,u.nombre`, [cursoId, curso.cerrado]);
     const materias = await conn.query('SELECT cm.id,m.nombre FROM curso_materia cm JOIN materias m ON m.id=cm.materia_id WHERE cm.curso_id=? ORDER BY m.nombre', [cursoId]);
-    const notas = await conn.query(`SELECT e.id,e.curso_materia_id,e.tipo,e.descripcion,e.bimestre,e.cierre,e.es_acumulativo,e.evaluacion_origen_id,n.alumno_id,n.nota
+    const notas = await conn.query(`SELECT e.id,e.curso_materia_id,e.tipo,e.descripcion,e.bimestre,e.cierre,e.es_acumulativo,e.evaluacion_origen_id,n.alumno_id,n.nota,n.nota_conceptual,n.observaciones,n.revision AS nota_revision
       FROM curso_materia cm JOIN evaluaciones e ON e.curso_materia_id=cm.id JOIN notas n ON n.evaluacion_id=e.id WHERE cm.curso_id=? ORDER BY e.id`, [cursoId]);
     res.json({ success: true, curso, periodo, ...construirEstadisticas(alumnos, materias, notas, periodo) });
   } catch (err) { console.error('Estadísticas:', err.code); res.status(500).json({ success: false, error: 'No pudimos calcular las estadísticas.' }); }

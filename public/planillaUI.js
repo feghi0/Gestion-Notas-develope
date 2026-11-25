@@ -9,14 +9,14 @@
  table.addEventListener('click',e=>{const boton=e.target.closest('[data-toggle]');if(boton){const n=boton.dataset.toggle;colapsados.has(n)?colapsados.delete(n):colapsados.add(n);columnas();}});
  const dialog=document.createElement('dialog');dialog.className='detalle-nota-dialog';dialog.innerHTML=`<form id="detalleNotaForm"><h2>Detalle de calificación</h2><p>El tema, fecha, tipo y obligatoriedad pertenecen a la evaluación y afectan a todos sus alumnos. La nota y observaciones son individuales.</p><label>Tema<input id="detalleTema" maxlength="500" required></label><label>Fecha<input id="detalleFecha" type="date" required></label><label>Tipo<input id="detalleTipo" maxlength="100" required></label><label>Bimestre<select id="detalleBimestre"><option>1</option><option>2</option><option>3</option><option>4</option></select></label><label><input id="detalleObligatoria" type="checkbox">Obligatoria</label><label>Calificación<select id="detalleModo"><option value="">Numérica</option><option value="EN_PROCESO">En proceso</option></select></label><label>Nota<input id="detalleValor" type="number" min="1" max="10" step="0.01"></label><label>Observaciones individuales<textarea id="detalleObservaciones" maxlength="2000"></textarea></label><p id="detalleError" role="alert"></p><div><button type="submit" id="detalleGuardar">Guardar cambios</button><button type="button" id="detalleCancelar">Cerrar</button></div></form>`;document.body.append(dialog);
  function habilitarRecuperaciones(){
-  const activo=document.getElementById('globalEsAcumulativo').checked,origenId=Number(document.getElementById('globalEvaluacionOrigen').value),fecha=document.getElementById('globalFecha').value,bimestre=Number(document.getElementById('globalBimestre').value);
+  const activo=document.getElementById('globalEsAcumulativo').checked,origenId=Number(document.getElementById('globalEvaluacionOrigen').value),fecha=fechaCargaEvaluacion(),bimestre=Number(document.getElementById('globalBimestre').value);
   const original=evaluacionesGlobal.find(e=>Number(e.id)===origenId),selector=document.getElementById('globalBimestre');
   for(const o of selector.options)o.disabled=bloqueada(o.value)||(activo&&original&&Number(o.value)<Number(original.bimestre));
   selector.title=activo&&original?'La acumulativa debe pertenecer al bimestre '+original.bimestre+' o posterior.':'';
   if(selector.selectedOptions[0]?.disabled){selector.value=[...selector.options].find(o=>!o.disabled)?.value||'';}
   for(const a of alumnosGlobales){const input=document.getElementById('nota-'+a.id);if(!input)continue;const origen=evaluacionesGlobal.find(e=>Number(e.id)===origenId&&Number(e.alumno_id)===Number(a.id));const error=activo?ReglasAcademicas.puedeRecuperar(origen,a.id,fecha,0,Number(selector.value)):null;input.disabled=!!error;input.title=error||'';if(error)input.value='';}
  }
- for(const id of ['globalEsAcumulativo','globalEvaluacionOrigen','globalFecha','globalBimestre'])document.getElementById(id).addEventListener('change',()=>setTimeout(habilitarRecuperaciones,0));
+ for(const id of ['globalEsAcumulativo','globalEvaluacionOrigen','globalBimestre'])document.getElementById(id).addEventListener('change',()=>setTimeout(habilitarRecuperaciones,0));
  const campo=id=>document.getElementById(id);let seleccion=null,cierres=[];
  const bloqueada=b=>cierres.some(c=>c.cerrado&&(c.bimestre===0||Number(c.bimestre)===Number(b)));
  campo('detalleCancelar').onclick=()=>dialog.close();campo('detalleModo').onchange=()=>campo('detalleValor').disabled=!!campo('detalleModo').value;
@@ -58,6 +58,5 @@
   for(const [id,cerrado] of [['cerrarAcademico',true],['abrirAcademico',false]])campo(id).onclick=async()=>{const b=Number(campo('instanciaAcademica').value);campo('estadoCierreAcademico').textContent='Guardando…';try{const res=await apiFetch('/planilla/cierre-academico/'+cursoMateriaId,{method:'POST',body:JSON.stringify({bimestre:b,cerrado})});if(!res)return;const d=await res.json();if(!res.ok)throw Error(d.error);await cargar();campo('estadoCierreAcademico').textContent='Instancia '+(cerrado?'cerrada':'reabierta')+'.';}catch(e){campo('estadoCierreAcademico').textContent=e.message;}};
   campo('estadoCierreAcademico').textContent='Cerrados: '+((data.cierres||[]).filter(c=>c.cerrado).map(c=>c.bimestre?'B'+c.bimestre:'Materia').join(', ')||'ninguno');
  };
- campo('globalFecha').value=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
  document.getElementById('globalAlumnos').addEventListener('input',e=>{if(e.target.matches('input'))e.target.setCustomValidity(ReglasAcademicas.validarNota(e.target.value,campo('globalTipo').value)||'');});
 })();

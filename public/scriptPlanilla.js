@@ -1,3 +1,6 @@
+function fechaCargaEvaluacion(){
+ return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+}
 let estadoPeriodosRecuperacion=null;
 function bloqueoPeriodoRecuperacion(cierre,fecha){
  const periodo=estadoPeriodosRecuperacion?.periodos.find(p=>p.cierre===Number(cierre));
@@ -509,7 +512,6 @@ async function guardarGlobal() {
     }
   }
 
-  if(!ReglasAcademicas.validarFecha(document.getElementById('globalFecha').value)){mostrarMensaje('Indicá una fecha válida.','error');return;}
   const notas = [];
   for (const alumno of alumnosGlobales) {
     const notaInput = document.getElementById(`nota-${alumno.id}`);
@@ -524,7 +526,7 @@ async function guardarGlobal() {
     }
     const errorNota=ReglasAcademicas.validarNota(valor,tipo);
     if(errorNota){notaInput.setCustomValidity(errorNota);notaInput.reportValidity();return;}
-    if(esAcumulativo){const origen=evaluacionesGlobal.find(e=>Number(e.id)===evaluacionOrigenId&&Number(e.alumno_id)===Number(alumno.id));const errorOrigen=ReglasAcademicas.puedeRecuperar(origen,alumno.id,document.getElementById('globalFecha').value,0,Number(bimestre));if(errorOrigen){mostrarMensaje(errorOrigen,'error');return;}}
+    if(esAcumulativo){const origen=evaluacionesGlobal.find(e=>Number(e.id)===evaluacionOrigenId&&Number(e.alumno_id)===Number(alumno.id));const errorOrigen=ReglasAcademicas.puedeRecuperar(origen,alumno.id,fechaCargaEvaluacion(),0,Number(bimestre));if(errorOrigen){mostrarMensaje(errorOrigen,'error');return;}}
     notas.push({ alumnoId: alumno.id, nota: valor });
   }
 
@@ -533,7 +535,7 @@ async function guardarGlobal() {
   try {
     const res = await apiFetch("/planilla/evaluacion-global", {
       method: "POST",
-      body: JSON.stringify({ cursoMateriaId, descripcion, tipo, bimestre, notas, esAcumulativo, evaluacionOrigenId,fecha:document.getElementById('globalFecha').value,obligatoria:document.getElementById('globalObligatoria').checked })
+      body: JSON.stringify({ cursoMateriaId, descripcion, tipo, bimestre, notas, esAcumulativo, evaluacionOrigenId })
     });
     if (!res) return;
     if (!res.ok) { const err = await res.json(); mostrarMensaje(err.error || "No se pudo eliminar esa evaluación. Probá de nuevo.", "error"); return; }

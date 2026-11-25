@@ -286,7 +286,12 @@ async function validarGuardado(req,res,next) {
   const body=req.body || {}; body.fecha=body.fecha || fechaHoy();
   if(!reglas.validarFecha(body.fecha))throw errorAcademico('Indicá una fecha válida.');
   if(body.obligatoria!==undefined && typeof body.obligatoria!=='boolean')throw errorAcademico('La obligatoriedad debe ser verdadera o falsa.');
+  const periodoError=reglas.validarPeriodoDiciembre(Number(body.numeroCierre || body.cierre || (/^Cierre Diciembre$/i.test(body.tipo||'')?1:0)),body.fecha);
+  if(periodoError)throw errorAcademico(periodoError,403);
   if(req.path.startsWith('/importar/')) {
+    if((body.filas||[]).some(f=>f.c1!==undefined&&f.c1!==null&&f.c1!=='')) {
+      const mensaje=reglas.validarPeriodoDiciembre(1,body.fecha);if(mensaje)throw errorAcademico(mensaje,403);
+    }
     for(const fila of body.filas || [])for(const key of ['b1','b2','b3','b4','c1','c2','cq1','cq2','nf'])
       if(fila[key]!==undefined&&fila[key]!==null&&fila[key]!==''&&reglas.validarNota(fila[key]))throw errorAcademico(`Nota inválida en ${key}: escala 1 a 10, hasta dos decimales.`);
     return next();
@@ -1096,6 +1101,7 @@ router.patch('/evaluacion/:id',authMiddleware,async(req,res)=>{
   if(body.evaluacionRevision!==undefined&&Number(body.evaluacionRevision)!==actual.revision)throw errorAcademico('La evaluación fue modificada por otra persona.',409);
   const tipo=body.tipo ?? actual.tipo,descripcion=body.descripcion ?? actual.descripcion,fecha=body.fecha ?? actual.fecha;
   const bimestre=body.bimestre===undefined?actual.bimestre:Number(body.bimestre),cierre=Number(actual.cierre||0);
+  const periodoError=reglas.validarPeriodoDiciembre(cierre,fecha);if(periodoError)throw errorAcademico(periodoError,403);
   if(typeof descripcion!=='string'||!descripcion.trim()||descripcion.length>500||typeof tipo!=='string'||!tipo.trim()||tipo.length>100||!reglas.validarFecha(fecha))throw errorAcademico('Completá tema, tipo y fecha válidos.');
   if(!cierre&&!bimestreValido(bimestre))throw errorAcademico('Bimestre inválido.');
   if(body.obligatoria!==undefined&&typeof body.obligatoria!=='boolean')throw errorAcademico('Obligatoriedad inválida.');
@@ -1146,13 +1152,15 @@ router.delete("/evaluacion/:id", authMiddleware, async (req, res) => {
     }
 
     const evalCheck = await conn.query(
-      "SELECT id FROM evaluaciones WHERE id = ? AND curso_materia_id = ?",
+      "SELECT id, cierre FROM evaluaciones WHERE id = ? AND curso_materia_id = ?",
       [id, cursoMateriaId]
     );
     if (!evalCheck || evalCheck.length === 0) {
       return res.status(404).json({ success: false, error: "Evaluación no encontrada en este curso" });
     }
 
+    const periodoError=reglas.validarPeriodoDiciembre(evalCheck[0].cierre);
+    if(periodoError)return res.status(403).json({success:false,error:periodoError});
     await conn.beginTransaction();
 
     await conn.query(

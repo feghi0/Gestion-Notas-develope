@@ -49,5 +49,13 @@
     const nums = [cuat1, cuat2].filter(n => n !== '-' && n !== EN_PROCESO).map(Number);
     return nums.length ? (nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(2) : '-';
   }
-  return { EN_PROCESO, validarNota, validarFecha, puedeRecuperar, esParticipacion, valorParticipacion, calcularNotaFinal };
+  // La fecha real de Buenos Aires manda; cambiar la fecha del examen no habilita el período.
+  function validarPeriodoDiciembre(cierre, fecha, ahora = new Date()) {
+    if (Number(cierre) !== 1) return null;
+    const mes = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Argentina/Buenos_Aires', month: '2-digit' }).format(ahora);
+    if (mes !== '12') return 'Las notas de diciembre solo pueden cargarse o modificarse durante diciembre (hora de Buenos Aires).';
+    if (fecha && (!validarFecha(fecha) || String(fecha).slice(5, 7) !== '12')) return 'La fecha de la evaluación de diciembre debe pertenecer a diciembre.';
+    return null;
+  }
+  return { EN_PROCESO, validarNota, validarFecha, puedeRecuperar, esParticipacion, valorParticipacion, calcularNotaFinal, validarPeriodoDiciembre };
 });

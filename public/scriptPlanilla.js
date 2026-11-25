@@ -636,6 +636,11 @@ function renderContenidoDic(el, alumnosParaDic) {
     </div>
   `;
   el._alumnosParaDic = alumnosParaDic;
+  const bloqueo=ReglasAcademicas.validarPeriodoDiciembre(1);
+  if(bloqueo){
+    el.querySelectorAll('input,select,button').forEach(control=>control.disabled=true);
+    const aviso=document.createElement('p');aviso.setAttribute('role','status');aviso.textContent=bloqueo;el.prepend(aviso);
+  }
 }
 
 function actualizarTemasDic() {
@@ -672,6 +677,8 @@ function temasAdeudados(evaluacionesAlumno) {
 
 async function guardarCierreDic() {
   if (!puedeEscribir()) return;
+  const bloqueo=ReglasAcademicas.validarPeriodoDiciembre(1);
+  if(bloqueo){mostrarMensaje(bloqueo,'error');return;}
 
   const alumnoId     = Number(document.getElementById("dicSelAlumno").value);
   const evaluacionId = Number(document.getElementById("dicSelTema").value);

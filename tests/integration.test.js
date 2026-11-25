@@ -230,6 +230,26 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
   const originalBody={cursoMateriaId:1,tipo:'Examen escrito',descripcion:'Origen validado',fecha:'2026-05-01',bimestre:1,notas:[{alumnoId:6,nota:4}]};
   assert.equal((await request('/planilla/evaluacion-global',admin,originalBody)).status,200);
   const original=(await db.query("SELECT id FROM evaluaciones WHERE descripcion='Origen validado'")).rows[0];
+  // Fijar solamente el reloj de la política para verificar el bloqueo incluso al ejecutar en diciembre.
+  const reglas=require('../public/reglasAcademicas');
+  const validarPeriodoReal=reglas.validarPeriodoDiciembre;
+  reglas.validarPeriodoDiciembre=(cierre,fecha)=>validarPeriodoReal(cierre,fecha,new Date('2026-08-15T15:00:00Z'));
+  try {
+    const datosDic={cursoMateriaId:1,alumnoId:6,nota:8,notas:[{alumnoId:6,nota:8}],numeroCierre:1,cierre:1,fecha:'2026-12-15',evaluacionId:original.id,evaluacionOrigenId:original.id};
+    for(const [ruta,metodo] of [['/planilla/cierre-tema','PATCH'],['/planilla/cierre-global','POST'],['/planilla/evaluacion','POST'],['/planilla/evaluacion-global','POST']]){
+      const respuesta=await request(ruta,admin,datosDic,metodo);
+      assert.equal(respuesta.status,403);
+      assert.match((await respuesta.json()).error,/durante diciembre/);
+    }
+    assert.equal((await request('/planilla/importar/1',admin,{fecha:'2026-12-15',filas:[{alumnoId:6,c1:8}]})).status,403);
+    const diciembre=(await db.query("INSERT INTO evaluaciones(curso_materia_id,tipo,descripcion,fecha,cierre,evaluacion_origen_id) VALUES(1,'Cierre Diciembre','Nota histórica','2026-12-15',1,$1) RETURNING id",[original.id])).rows[0];
+    await db.query('INSERT INTO notas(evaluacion_id,alumno_id,nota) VALUES($1,6,8)',[diciembre.id]);
+    assert.equal((await request('/planilla/evaluacion/'+diciembre.id,admin,{cursoMateriaId:1,alumnoId:6,notaAnterior:8,nota:9},'PATCH')).status,403);
+    assert.equal((await request('/planilla/evaluacion/'+diciembre.id,admin,{cursoMateriaId:1,alumnoId:6},'DELETE')).status,403);
+    assert.equal(Number((await db.query('SELECT nota FROM notas WHERE evaluacion_id=$1',[diciembre.id])).rows[0].nota),8);
+    await db.query('DELETE FROM notas WHERE evaluacion_id=$1',[diciembre.id]);
+    await db.query('DELETE FROM evaluaciones WHERE id=$1',[diciembre.id]);
+  } finally { reglas.validarPeriodoDiciembre=validarPeriodoReal; }
   const recuperacion={...originalBody,descripcion:'Recuperación válida',esAcumulativo:true,evaluacionOrigenId:original.id};
   assert.equal((await request('/planilla/evaluacion-global',admin,{...recuperacion,fecha:'2026-04-01'})).status,400);
   assert.equal((await request('/planilla/evaluacion-global',admin,{...recuperacion,notas:[{alumnoId:5,nota:8}]})).status,400);

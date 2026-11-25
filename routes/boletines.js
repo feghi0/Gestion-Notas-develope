@@ -217,7 +217,7 @@ router.get("/excel/:cursoId", authMiddleware, async (req, res) => {
     function valorNumerico(val) {
       if (!val || val === "-") return null;
       const n = parseFloat(val);
-      return isNaN(n) ? String(val) : n;
+      return isNaN(n) ? String(val).replace(/^En proceso$/i,'EP') : n;
     }
 
     function bordeThin(color = "FFDDDDDD") {

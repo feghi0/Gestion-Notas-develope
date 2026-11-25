@@ -25,6 +25,7 @@
     if (origen.fecha && fecha < (origen.fecha instanceof Date ? origen.fecha.toISOString() : String(origen.fecha)).slice(0, 10)) return 'La fecha no puede ser anterior a la evaluación original.';
     if (cierre === 1 && Number(origen.cierre)) return 'Diciembre debe recuperar una evaluación de bimestre.';
     if (cierre === 2 && Number(origen.cierre) !== 1) return 'Febrero debe recuperar una evaluación de diciembre.';
+    if (!cierre && ![1,2,3,4].includes(Number(bimestre))) return 'Seleccioná un bimestre válido para la recuperación.';
     if (!cierre && (Number(origen.cierre) || (bimestre && Number(origen.bimestre) > bimestre))) return 'La recuperación no puede preceder a la instancia original.';
     return null;
   }

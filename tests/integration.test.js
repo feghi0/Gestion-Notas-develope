@@ -15,6 +15,7 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
   await db.exec(fs.readFileSync("supabase/migrations/20261015155214_academic_years.sql", "utf8"));
   await db.exec(fs.readFileSync("supabase/migrations/20261026021850_automatic_academic_year.sql", "utf8"));
   await db.exec(fs.readFileSync("supabase/migrations/20261125005446_detailed_grades_academic_closures.sql", "utf8"));
+  await db.exec(fs.readFileSync("supabase/migrations/20261125013316_recovery_period_order.sql", "utf8"));
   const connection = wrapClient({
     async query(config) {
       const text = typeof config === "string" ? config : config.text;
@@ -249,5 +250,9 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
     assert.equal((await request('/planilla/evaluacion-global',admin,{cursoMateriaId:materiaCierre.id,tipo:'Examen escrito',descripcion:'Bloqueada',fecha:'2026-06-02',bimestre:1,notas:inscritos.map(a=>({alumnoId:a.alumno_id,nota:8}))})).status,423);
     assert.equal((await request('/planilla/cierre-academico/'+materiaCierre.id,admin,{bimestre:1,cerrado:false})).status,200);
   }
+
+  await db.query("UPDATE evaluaciones SET bimestre=3 WHERE descripcion='Obligatoria completa'");
+  const origenOrden=(await db.query("SELECT id,curso_materia_id FROM evaluaciones WHERE descripcion='Obligatoria completa'")).rows[0];
+  await assert.rejects(db.query("INSERT INTO evaluaciones(curso_materia_id,descripcion,tipo,fecha,bimestre,es_acumulativo,evaluacion_origen_id) VALUES($1,'Orden inválido','Examen escrito','2026-12-01',2,1,$2)",[origenOrden.curso_materia_id,origenOrden.id]),/mismo bimestre/);
 
 });

@@ -14,10 +14,9 @@
     const titulo=document.createElement('h2');titulo.textContent=p.nombre;card.append(titulo);
     const status=document.createElement('p');status.className='periodo-estado';status.textContent=p.habilitado?'Habilitado':p.modo==='programado'?(data.hoy<p.desde?'Programado · todavía no comenzó':'Finalizado · bloqueado'):'Bloqueado';card.append(status);
     const form=document.createElement('form');
-    form.innerHTML='<label>Funcionamiento<select name="modo"><option value="programado">Programar por fechas</option><option value="bloqueado">Bloqueado</option><option value="automatico">Automático según el mes</option></select></label><label>Desde<input type="date" name="desde" required></label><label>Hasta (inclusive)<input type="date" name="hasta" required></label><div class="periodo-acciones"><button class="generar-btn" type="submit">Guardar período</button><button type="button" name="bloquear">Bloquear ahora</button></div>';
+    form.innerHTML='<label>Funcionamiento<select name="modo"><option value="programado">Programar por fechas</option><option value="bloqueado">Bloqueado</option></select></label><label>Desde<input type="date" name="desde" required></label><label>Hasta (inclusive)<input type="date" name="hasta" required></label><div class="periodo-acciones"><button class="generar-btn" type="submit">Guardar período</button></div>';
     const modo=form.elements.modo,desde=form.elements.desde,hasta=form.elements.hasta;
-    if(p.modo==='habilitado')modo.add(new Option('Habilitado manualmente (configuración anterior)','habilitado'));
-    modo.value=p.modo;desde.value=p.desde||'';hasta.value=p.hasta||'';
+    modo.value=p.modo==='bloqueado'?'bloqueado':'programado';desde.value=p.desde||'';hasta.value=p.hasta||'';
     const readonly=data.cerrado||!data.permiteEscritura;
     function ajustar(){desde.disabled=hasta.disabled=readonly||modo.value!=='programado';hasta.min=desde.value;desde.max=hasta.value;}
     modo.onchange=ajustar;desde.onchange=hasta.onchange=ajustar;
@@ -28,7 +27,6 @@
      catch(e){mensaje(e.message,true);}finally{ocupado=false;selector.disabled=false;lista.querySelectorAll('button').forEach(b=>b.disabled=readonly);}
     }
     form.onsubmit=e=>{e.preventDefault();guardar({modo:modo.value,desde:desde.value,hasta:hasta.value});};
-    form.elements.bloquear.onclick=()=>guardar({modo:'bloqueado'});
     card.append(form);lista.append(card);
    }
   }catch(e){mensaje(e.message,true);}

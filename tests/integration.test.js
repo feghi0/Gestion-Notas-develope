@@ -227,6 +227,11 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
   // Validaciones nuevas: entradas estrictas y recuperaciones sin origen previo.
   for(const nota of [-1,11,'1e1','',null,true])assert.equal((await request('/planilla/evaluacion-global',admin,{cursoMateriaId:1,tipo:'Examen escrito',descripcion:'Entrada inválida',bimestre:1,notas:[{alumnoId:5,nota}]})).status,400);
   assert.equal((await request('/planilla/cierre-academico/1',admin,{bimestre:0,cerrado:true})).status,400);
+  for(const cerrado of [true,false]){
+    const respuesta=await request('/planilla/cierre-academico/1',newTeacherToken,{bimestre:1,cerrado});
+    assert.equal(respuesta.status,403);
+    assert.match((await respuesta.json()).error,/Solo el regente/);
+  }
 
   const originalBody={cursoMateriaId:1,tipo:'Examen escrito',descripcion:'Origen validado',fecha:'2026-05-01',bimestre:1,notas:[{alumnoId:6,nota:4}]};
   assert.equal((await request('/planilla/evaluacion-global',admin,originalBody)).status,200);

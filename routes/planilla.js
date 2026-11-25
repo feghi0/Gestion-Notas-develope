@@ -1139,6 +1139,7 @@ router.patch('/periodos-recuperacion/:cursoMateriaId/:cierre',authMiddleware,asy
 
 router.post('/cierre-academico/:cursoMateriaId',authMiddleware,async(req,res)=>{
  let conn;try{
+  if(req.user.rango!=='regente'||req.user.permiso==='lectura')throw errorAcademico('Solo el regente con permiso de escritura puede cerrar o reabrir instancias.',403);
   const materiaId=Number(req.params.cursoMateriaId),bimestre=Number(req.body?.bimestre),cerrado=req.body?.cerrado;
   if(!Number.isSafeInteger(materiaId)||materiaId<1||!Number.isInteger(bimestre)||bimestre<0||bimestre>4||typeof cerrado!=='boolean')throw errorAcademico('Instancia de cierre inválida.');
   conn=await pool.getConnection();const acceso=await verificarAcceso(conn,materiaId,req.user,true);if(!acceso.ok)throw errorAcademico(acceso.error,acceso.status);

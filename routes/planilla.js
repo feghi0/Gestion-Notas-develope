@@ -8,6 +8,7 @@ const ExcelJS = require("exceljs");
 const { cursoAbierto } = require("../lib/ciclosLectivos");
 const { calcularResumenMateria } = require("../lib/calculoNotas");
 const reglas = require('../public/reglasAcademicas');
+const {obtenerPeriodos,validarPeriodo}=require('../lib/periodosRecuperacion');
 const { validarRecuperacion, validarCierre, fechaHoy, error: errorAcademico } = require('../lib/validacionAcademica');
 // ─── Helpers de acceso ────────────────────────────────────────────────────────
 
@@ -286,11 +287,11 @@ async function validarGuardado(req,res,next) {
   const body=req.body || {}; body.fecha=body.fecha || fechaHoy();
   if(!reglas.validarFecha(body.fecha))throw errorAcademico('Indicá una fecha válida.');
   if(body.obligatoria!==undefined && typeof body.obligatoria!=='boolean')throw errorAcademico('La obligatoriedad debe ser verdadera o falsa.');
-  const periodoError=reglas.validarPeriodoDiciembre(Number(body.numeroCierre || body.cierre || (/^Cierre Diciembre$/i.test(body.tipo||'')?1:0)),body.fecha);
-  if(periodoError)throw errorAcademico(periodoError,403);
+  const cierreSolicitado=Number(body.numeroCierre||body.cierre||(/^Cierre Diciembre$/i.test(body.tipo||'')?1:/^Cierre Febrero$/i.test(body.tipo||'')?2:0));
+  if([1,2].includes(cierreSolicitado)){conn=await pool.getConnection();await validarPeriodo(conn,body.cursoMateriaId,cierreSolicitado,body.fecha);}
   if(req.path.startsWith('/importar/')) {
-    if((body.filas||[]).some(f=>f.c1!==undefined&&f.c1!==null&&f.c1!=='')) {
-      const mensaje=reglas.validarPeriodoDiciembre(1,body.fecha);if(mensaje)throw errorAcademico(mensaje,403);
+    for(const [key,cierre] of [['c1',1],['c2',2]])if((body.filas||[]).some(f=>f[key]!==undefined&&f[key]!==null&&f[key]!=='')){
+      conn=conn||await pool.getConnection();await validarPeriodo(conn,req.params.cursoMateriaId,cierre,body.fecha);
     }
     for(const fila of body.filas || [])for(const key of ['b1','b2','b3','b4','c1','c2','cq1','cq2','nf'])
       if(fila[key]!==undefined&&fila[key]!==null&&fila[key]!==''&&reglas.validarNota(fila[key]))throw errorAcademico(`Nota inválida en ${key}: escala 1 a 10, hasta dos decimales.`);
@@ -308,7 +309,7 @@ async function validarGuardado(req,res,next) {
   if(body.esAcumulativo || cierre) {
    const origen=body.evaluacionOrigenId || body.evaluacionId;
    if(!origen)throw errorAcademico('Seleccioná la evaluación original antes del recuperatorio.');
-   conn=await pool.getConnection();
+   conn=conn||await pool.getConnection();
    for(const n of lista)await validarRecuperacion(conn,{origenId:origen,alumnoId:n.alumnoId,materiaId:body.cursoMateriaId,fecha:body.fecha,cierre,bimestre:body.bimestre});
   }
   next();
@@ -1101,7 +1102,7 @@ router.patch('/evaluacion/:id',authMiddleware,async(req,res)=>{
   if(body.evaluacionRevision!==undefined&&Number(body.evaluacionRevision)!==actual.revision)throw errorAcademico('La evaluación fue modificada por otra persona.',409);
   const tipo=body.tipo ?? actual.tipo,descripcion=body.descripcion ?? actual.descripcion,fecha=body.fecha ?? actual.fecha;
   const bimestre=body.bimestre===undefined?actual.bimestre:Number(body.bimestre),cierre=Number(actual.cierre||0);
-  const periodoError=reglas.validarPeriodoDiciembre(cierre,fecha);if(periodoError)throw errorAcademico(periodoError,403);
+  await validarPeriodo(conn,materiaId,cierre,fecha);
   if(typeof descripcion!=='string'||!descripcion.trim()||descripcion.length>500||typeof tipo!=='string'||!tipo.trim()||tipo.length>100||!reglas.validarFecha(fecha))throw errorAcademico('Completá tema, tipo y fecha válidos.');
   if(!cierre&&!bimestreValido(bimestre))throw errorAcademico('Bimestre inválido.');
   if(body.obligatoria!==undefined&&typeof body.obligatoria!=='boolean')throw errorAcademico('Obligatoriedad inválida.');
@@ -1117,6 +1118,22 @@ router.patch('/evaluacion/:id',authMiddleware,async(req,res)=>{
   if(!String(actual.descripcion||'').startsWith('Import override:'))await limpiarOverridesAlumno(conn,alumnoId,materiaId);
   await conn.commit();res.json({success:true});
  }catch(err){if(conn)await conn.rollback().catch(()=>{});res.status(err.status||(err.code==='55000'?423:err.code==='23514'?400:500)).json({success:false,error:err.status||['55000','23514'].includes(err.code)?err.message:'No pudimos guardar el detalle.'});}
+ finally{if(conn)conn.release();}
+});
+
+router.patch('/periodos-recuperacion/:cursoMateriaId/:cierre',authMiddleware,async(req,res)=>{
+ let conn;
+ try {
+  if(req.user.rango!=='regente'||req.user.permiso==='lectura')throw errorAcademico('Solo el regente con permiso de escritura puede configurar los períodos.',403);
+  const materiaId=Number(req.params.cursoMateriaId),cierre=Number(req.params.cierre),modo=req.body?.modo;
+  if(!Number.isSafeInteger(materiaId)||materiaId<1||![1,2].includes(cierre)||!['automatico','habilitado','bloqueado'].includes(modo))throw errorAcademico('Configuración de período inválida.');
+  conn=await pool.getConnection();
+  const acceso=await verificarAcceso(conn,materiaId,req.user,true);if(!acceso.ok)throw errorAcademico(acceso.error,acceso.status);
+  const {cicloLectivo}=await obtenerPeriodos(conn,materiaId);
+  await conn.query(`INSERT INTO periodos_recuperacion(ciclo_lectivo,cierre,modo,actor_id) VALUES(?,?,?,?)
+    ON CONFLICT(ciclo_lectivo,cierre) DO UPDATE SET modo=EXCLUDED.modo,actor_id=EXCLUDED.actor_id,actualizado_en=clock_timestamp()`,[cicloLectivo,cierre,modo,req.user.id]);
+  res.json({success:true,recuperaciones:await obtenerPeriodos(conn,materiaId)});
+ }catch(err){res.status(err.status||500).json({success:false,error:err.status?err.message:'No pudimos configurar el período.'});}
  finally{if(conn)conn.release();}
 });
 
@@ -1159,8 +1176,7 @@ router.delete("/evaluacion/:id", authMiddleware, async (req, res) => {
       return res.status(404).json({ success: false, error: "Evaluación no encontrada en este curso" });
     }
 
-    const periodoError=reglas.validarPeriodoDiciembre(evalCheck[0].cierre);
-    if(periodoError)return res.status(403).json({success:false,error:periodoError});
+    await validarPeriodo(conn,cursoMateriaId,evalCheck[0].cierre);
     await conn.beginTransaction();
 
     await conn.query(
@@ -1186,7 +1202,7 @@ router.delete("/evaluacion/:id", authMiddleware, async (req, res) => {
   } catch (err) {
     if (conn) { try { await conn.rollback(); } catch (_) {} }
     console.error("Error al eliminar evaluación:", err);
-    res.status(err.status || (err.code === "55000" ? 423 : err.code === "23514" ? 400 : 500)).json({ success: false, error: "Error al eliminar evaluación" });
+    res.status(err.status || (err.code === "55000" ? 423 : err.code === "23514" ? 400 : 500)).json({ success: false, error: err.status ? err.message : "Error al eliminar evaluación" });
   } finally {
     if (conn) conn.release();
   }
@@ -1395,6 +1411,7 @@ router.get("/:cursoMateriaId/:usuarioId", authMiddleware, async (req, res) => {
     res.json({
       success: true,
       cicloCerrado: ciclo.cerrado,
+      recuperaciones: await obtenerPeriodos(conn,cursoMateriaId),
       user:    { id: user.id, permiso: user.permiso, rango: user.rango },
       materia: materia[0],
       alumnos,

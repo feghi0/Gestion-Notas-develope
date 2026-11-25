@@ -22,20 +22,37 @@
  campo('detalleCancelar').onclick=()=>dialog.close();campo('detalleModo').onchange=()=>campo('detalleValor').disabled=!!campo('detalleModo').value;
  window.editarNota=(_boton,id,alumno)=>{
   seleccion=evaluacionesGlobal.find(e=>Number(e.id)===Number(id)&&Number(e.alumno_id)===Number(alumno));if(!seleccion)return;
-  const e=seleccion;const bloqueoPeriodo=ReglasAcademicas.validarPeriodoDiciembre(e.cierre);const editable=puedeEscribir()&&!bloqueada(e.bimestre)&&!bloqueoPeriodo;campo('detalleTema').value=e.descripcion||'';campo('detalleFecha').value=String(e.fecha||'').slice(0,10);campo('detalleTipo').value=e.tipo||'';campo('detalleBimestre').value=e.bimestre||1;campo('detalleObligatoria').checked=e.obligatoria;campo('detalleModo').value=e.nota_conceptual||'';campo('detalleValor').value=e.nota??'';campo('detalleObservaciones').value=e.observaciones||'';campo('detalleError').textContent=bloqueoPeriodo||'';
+  const e=seleccion;const bloqueoPeriodo=bloqueoPeriodoRecuperacion(e.cierre);const editable=puedeEscribir()&&!bloqueada(e.bimestre)&&!bloqueoPeriodo;campo('detalleTema').value=e.descripcion||'';campo('detalleFecha').value=String(e.fecha||'').slice(0,10);campo('detalleTipo').value=e.tipo||'';campo('detalleBimestre').value=e.bimestre||1;campo('detalleObligatoria').checked=e.obligatoria;campo('detalleModo').value=e.nota_conceptual||'';campo('detalleValor').value=e.nota??'';campo('detalleObservaciones').value=e.observaciones||'';campo('detalleError').textContent=bloqueoPeriodo||'';
   dialog.querySelectorAll('input,select,textarea').forEach(x=>x.disabled=!editable);campo('detalleBimestre').disabled=!editable||!!Number(e.cierre);campo('detalleGuardar').hidden=!editable;campo('detalleValor').min=esParticipacion(e.tipo)?0:1;campo('detalleValor').max=esParticipacion(e.tipo)?1:10;campo('detalleValor').disabled=!editable||!!e.nota_conceptual;dialog.showModal();
  };
  table.addEventListener('click',e=>{if(e.target.closest('button'))return;const ev=e.target.closest('[data-evaluacion]');if(ev)window.editarNota(ev,ev.dataset.evaluacion,ev.dataset.alumno);});
  campo('detalleNotaForm').onsubmit=async event=>{
   event.preventDefault();if(!puedeEscribir()||!seleccion)return;const e=seleccion,concepto=campo('detalleModo').value||null;
-  const error=ReglasAcademicas.validarPeriodoDiciembre(e.cierre,campo('detalleFecha').value)||(concepto?null:ReglasAcademicas.validarNota(campo('detalleValor').value,campo('detalleTipo').value));
+  const error=bloqueoPeriodoRecuperacion(e.cierre,campo('detalleFecha').value)||(concepto?null:ReglasAcademicas.validarNota(campo('detalleValor').value,campo('detalleTipo').value));
   if(error){campo('detalleError').textContent=error;return;}
   campo('detalleGuardar').disabled=true;
   try{const res=await apiFetch('/planilla/evaluacion/'+e.id,{method:'PATCH',body:JSON.stringify({alumnoId:e.alumno_id,cursoMateriaId,nota:concepto?null:Number(campo('detalleValor').value),notaConceptual:concepto,notaAnterior:e.nota,notaRevision:e.nota_revision,evaluacionRevision:e.evaluacion_revision,descripcion:campo('detalleTema').value,fecha:campo('detalleFecha').value,tipo:campo('detalleTipo').value,bimestre:Number(e.bimestre?campo('detalleBimestre').value:0)||null,obligatoria:campo('detalleObligatoria').checked,observaciones:campo('detalleObservaciones').value})});if(!res)return;const data=await res.json();if(!res.ok)throw Error(data.error);dialog.close();await cargar();}catch(err){campo('detalleError').textContent=err.message;}finally{campo('detalleGuardar').disabled=false;}
  };
+ const periodos=document.createElement('section');periodos.className='control-cierre';document.getElementById('tableContainer').before(periodos);
+ function renderPeriodos(data){
+  const config=data.recuperaciones;if(!config){periodos.hidden=true;return;}
+  periodos.hidden=false;periodos.replaceChildren();
+  const titulo=document.createElement('h2');titulo.textContent='Períodos de recuperación — Ciclo '+config.cicloLectivo;periodos.append(titulo);
+  const info=document.createElement('p');info.textContent='Esta configuración se aplica a todos los cursos del ciclo. Automático: diciembre en diciembre y febrero en febrero, según la hora de Buenos Aires. Las decisiones manuales se mantienen hasta cambiarlas o volver a automático.';periodos.append(info);
+  for(const p of config.periodos){
+   const fila=document.createElement('div'),estado=document.createElement('span');estado.textContent=p.nombre+': '+(p.habilitado?'Habilitado':'Bloqueado')+' ('+p.modo+'). ';fila.append(estado);
+   if(data.user.rango==='regente'&&puedeEscribir()){
+    for(const [modo,texto] of [['habilitado','Habilitar'],['bloqueado','Bloquear'],['automatico','Volver a automático']]){
+     const boton=document.createElement('button');boton.type='button';boton.textContent=texto;boton.disabled=p.modo===modo;boton.setAttribute('aria-label',texto+' '+p.nombre);
+     boton.onclick=async()=>{fila.querySelectorAll('button').forEach(b=>b.disabled=true);try{const r=await apiFetch('/planilla/periodos-recuperacion/'+cursoMateriaId+'/'+p.cierre,{method:'PATCH',body:JSON.stringify({modo})});if(!r)return;const d=await r.json();if(!r.ok)throw Error(d.error);await cargar();}catch(e){estado.textContent=e.message;fila.querySelectorAll('button').forEach(b=>b.disabled=b===boton&&p.modo===modo);}};fila.append(boton);
+    }
+   }
+   periodos.append(fila);
+  }
+ }
  const cierre=document.createElement('div');cierre.className='control-cierre';document.getElementById('tableContainer').before(cierre);
  window.actualizarUXPlanilla=data=>{
-  cierres=data.cierres||[];columnas();habilitarRecuperaciones();
+  renderPeriodos(data);cierres=data.cierres||[];columnas();habilitarRecuperaciones();
   document.querySelectorAll("#globalBimestre option").forEach(o=>o.disabled=bloqueada(o.value));
   document.querySelectorAll("#globalForm input,#globalForm select,#globalForm button").forEach(el=>{if(cierres.some(c=>c.cerrado&&c.bimestre===0))el.disabled=true;});cierre.hidden=!puedeEscribir();cierre.innerHTML='<label>Instancia de cierre <select id="instanciaAcademica"><option value="0">Materia completa</option>'+[1,2,3,4].map(b=>`<option value="${b}">Bimestre ${b}</option>`).join('')+'</select></label><button id="cerrarAcademico">Cerrar instancia</button><button id="abrirAcademico">Reabrir instancia</button><p id="estadoCierreAcademico" role="status"></p>';
   for(const [id,cerrado] of [['cerrarAcademico',true],['abrirAcademico',false]])campo(id).onclick=async()=>{const b=Number(campo('instanciaAcademica').value);campo('estadoCierreAcademico').textContent='Guardando…';try{const res=await apiFetch('/planilla/cierre-academico/'+cursoMateriaId,{method:'POST',body:JSON.stringify({bimestre:b,cerrado})});if(!res)return;const d=await res.json();if(!res.ok)throw Error(d.error);await cargar();campo('estadoCierreAcademico').textContent='Instancia '+(cerrado?'cerrada':'reabierta')+'.';}catch(e){campo('estadoCierreAcademico').textContent=e.message;}};

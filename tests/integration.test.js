@@ -16,6 +16,7 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
   await db.exec(fs.readFileSync("supabase/migrations/20261026021850_automatic_academic_year.sql", "utf8"));
   await db.exec(fs.readFileSync("supabase/migrations/20261125005446_detailed_grades_academic_closures.sql", "utf8"));
   await db.exec(fs.readFileSync("supabase/migrations/20261125013316_recovery_period_order.sql", "utf8"));
+  await db.exec(fs.readFileSync("supabase/migrations/20261125015748_periodos_recuperacion.sql", "utf8"));
   const connection = wrapClient({
     async query(config) {
       const text = typeof config === "string" ? config : config.text;
@@ -172,7 +173,7 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
   const newTeacherToken=(await newLogin.json()).token;
   assert.equal((await request("/dashboard/2", newTeacherToken)).status, 200);
   const rls = await db.query("SELECT tablename FROM pg_tables WHERE schemaname='public' AND rowsecurity");
-  assert.equal(rls.rows.length, 14);
+  assert.equal(rls.rows.length, 15);
   // Dos ciclos con el mismo curso y alumno no comparten inscripciones ni notas.
   assert.equal((await request("/ciclos", student, { anio:2027, copiarDe:2026 })).status,401);
   assert.equal((await request("/ciclos", newTeacherToken, { anio:2027 })).status,403);
@@ -233,7 +234,7 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
   // Fijar solamente el reloj de la política para verificar el bloqueo incluso al ejecutar en diciembre.
   const reglas=require('../public/reglasAcademicas');
   const validarPeriodoReal=reglas.validarPeriodoDiciembre;
-  reglas.validarPeriodoDiciembre=(cierre,fecha)=>validarPeriodoReal(cierre,fecha,new Date('2026-08-15T15:00:00Z'));
+  reglas.validarPeriodoDiciembre=(cierre,fecha,_ahora,modo)=>validarPeriodoReal(cierre,fecha,new Date('2026-08-15T15:00:00Z'),modo);
   try {
     const datosDic={cursoMateriaId:1,alumnoId:6,nota:8,notas:[{alumnoId:6,nota:8}],numeroCierre:1,cierre:1,fecha:'2026-12-15',evaluacionId:original.id,evaluacionOrigenId:original.id};
     for(const [ruta,metodo] of [['/planilla/cierre-tema','PATCH'],['/planilla/cierre-global','POST'],['/planilla/evaluacion','POST'],['/planilla/evaluacion-global','POST']]){
@@ -249,6 +250,25 @@ test("PostgreSQL: esquema, login, permisos, planilla y exportaciones", async t =
     assert.equal(Number((await db.query('SELECT nota FROM notas WHERE evaluacion_id=$1',[diciembre.id])).rows[0].nota),8);
     await db.query('DELETE FROM notas WHERE evaluacion_id=$1',[diciembre.id]);
     await db.query('DELETE FROM evaluaciones WHERE id=$1',[diciembre.id]);
+    // Solo regencia configura; el permiso afecta todo el ciclo y se puede revocar.
+    const configurar=(cierre,modo,token=admin)=>request('/planilla/periodos-recuperacion/1/'+cierre,token,{modo},'PATCH');
+    assert.equal((await configurar(1,'habilitado',newTeacherToken)).status,403);
+    assert.equal((await configurar(1,'invalido')).status,400);
+    assert.equal((await configurar(1,'habilitado')).status,200);
+    const manual={...datosDic,nota:4,notas:[{alumnoId:6,nota:4}],fecha:'2026-08-15'};
+    assert.equal((await request('/planilla/cierre-tema',admin,manual,'PATCH')).status,200);
+    const dicManual=(await db.query('SELECT id FROM evaluaciones WHERE cierre=1 AND evaluacion_origen_id=$1',[original.id])).rows[0];
+    assert.equal((await configurar(2,'habilitado')).status,200);
+    assert.equal((await request('/planilla/cierre-tema',admin,{...manual,numeroCierre:2,cierre:2,evaluacionId:dicManual.id,evaluacionOrigenId:dicManual.id,nota:8},'PATCH')).status,200);
+    assert.equal((await configurar(1,'bloqueado')).status,200);
+    assert.equal((await request('/planilla/evaluacion/'+dicManual.id,admin,{cursoMateriaId:1,alumnoId:6,notaAnterior:4,nota:5},'PATCH')).status,403);
+    assert.equal((await request('/planilla/evaluacion/'+dicManual.id,admin,{cursoMateriaId:1,alumnoId:6},'DELETE')).status,403);
+    const estado=(await (await request('/planilla/1/1',admin)).json()).recuperaciones;
+    assert.equal(estado.periodos.find(p=>p.cierre===1).habilitado,false);
+    assert.equal(estado.periodos.find(p=>p.cierre===2).habilitado,true);
+    for(const cierre of [1,2])assert.equal((await configurar(cierre,'automatico')).status,200);
+    const hijos=(await db.query('SELECT id FROM evaluaciones WHERE evaluacion_origen_id=$1',[dicManual.id])).rows;
+    for(const e of [...hijos,dicManual]){await db.query('DELETE FROM notas WHERE evaluacion_id=$1',[e.id]);await db.query('DELETE FROM evaluaciones WHERE id=$1',[e.id]);}
   } finally { reglas.validarPeriodoDiciembre=validarPeriodoReal; }
   const recuperacion={...originalBody,descripcion:'Recuperación válida',esAcumulativo:true,evaluacionOrigenId:original.id};
   assert.equal((await request('/planilla/evaluacion-global',admin,{...recuperacion,fecha:'2026-04-01'})).status,400);

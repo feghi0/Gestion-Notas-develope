@@ -1,3 +1,21 @@
+let estadoPeriodosRecuperacion=null;
+function bloqueoPeriodoRecuperacion(cierre,fecha){
+ const periodo=estadoPeriodosRecuperacion?.periodos.find(p=>p.cierre===Number(cierre));
+ if(![1,2].includes(Number(cierre)))return null;
+ if(periodo){
+  if(!periodo.habilitado)return 'El período de '+periodo.nombre.toLowerCase()+' no está habilitado. Consultá al regente.';
+  // El estado efectivo lo calcula el servidor con su reloj de Buenos Aires.
+  if(periodo.modo==='automatico'&&fecha&&String(fecha).slice(5,7)!==(Number(cierre)===1?'12':'02'))return 'La fecha debe pertenecer a '+periodo.nombre.toLowerCase()+'.';
+  return null;
+ }
+ return ReglasAcademicas.validarPeriodoDiciembre(cierre,fecha);
+}
+function bloquearFormularioPeriodo(el,cierre){
+ const bloqueo=bloqueoPeriodoRecuperacion(cierre);
+ if(!bloqueo)return;
+ el.querySelectorAll('input,select,button').forEach(control=>control.disabled=true);
+ const aviso=document.createElement('p');aviso.setAttribute('role','status');aviso.textContent=bloqueo;el.prepend(aviso);
+}
 const params         = new URLSearchParams(location.search);
 const cursoMateriaId = params.get("materia");
 const permiso        = localStorage.getItem("permiso");
@@ -308,6 +326,7 @@ async function cargar() {
     }
 
     filtrarAlumnos();
+    estadoPeriodosRecuperacion=data.recuperaciones;
     window.actualizarUXPlanilla?.(data);
 
     if (puedeEscribir()) {
@@ -636,7 +655,7 @@ function renderContenidoDic(el, alumnosParaDic) {
     </div>
   `;
   el._alumnosParaDic = alumnosParaDic;
-  const bloqueo=ReglasAcademicas.validarPeriodoDiciembre(1);
+  const bloqueo=bloqueoPeriodoRecuperacion(1);
   if(bloqueo){
     el.querySelectorAll('input,select,button').forEach(control=>control.disabled=true);
     const aviso=document.createElement('p');aviso.setAttribute('role','status');aviso.textContent=bloqueo;el.prepend(aviso);
@@ -677,7 +696,7 @@ function temasAdeudados(evaluacionesAlumno) {
 
 async function guardarCierreDic() {
   if (!puedeEscribir()) return;
-  const bloqueo=ReglasAcademicas.validarPeriodoDiciembre(1);
+  const bloqueo=bloqueoPeriodoRecuperacion(1);
   if(bloqueo){mostrarMensaje(bloqueo,'error');return;}
 
   const alumnoId     = Number(document.getElementById("dicSelAlumno").value);
@@ -724,6 +743,7 @@ function renderContenidoFeb(el, alumnosParaFeb) {
     </div>
   `;
   el._alumnosParaFeb = alumnosParaFeb;
+  bloquearFormularioPeriodo(el,2);
 }
 
 function actualizarTemasFeb() {
@@ -748,6 +768,8 @@ function actualizarTemasFeb() {
 
 async function guardarCierreFeb() {
   if (!puedeEscribir()) return;
+  const bloqueo=bloqueoPeriodoRecuperacion(2);
+  if(bloqueo){mostrarMensaje(bloqueo,'error');return;}
 
   const alumnoId     = Number(document.getElementById("febSelAlumno").value);
   const evaluacionId = Number(document.getElementById("febSelTema").value);

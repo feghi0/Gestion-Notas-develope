@@ -35,7 +35,7 @@
  };
  const periodos=document.createElement('section');periodos.className='control-cierre';document.getElementById('tableContainer').before(periodos);
  function renderPeriodos(data){
-  const config=data.recuperaciones;if(!config){periodos.hidden=true;return;}
+  const config=data.recuperaciones;if(!config||data.user.rango!=='regente'){periodos.hidden=true;periodos.replaceChildren();return;}
   periodos.hidden=false;periodos.replaceChildren();
   const titulo=document.createElement('h2');titulo.textContent='Períodos de recuperación — Ciclo '+config.cicloLectivo;periodos.append(titulo);
   for(const p of config.periodos){

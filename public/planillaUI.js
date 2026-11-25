@@ -38,7 +38,6 @@
   const config=data.recuperaciones;if(!config){periodos.hidden=true;return;}
   periodos.hidden=false;periodos.replaceChildren();
   const titulo=document.createElement('h2');titulo.textContent='Períodos de recuperación — Ciclo '+config.cicloLectivo;periodos.append(titulo);
-  const info=document.createElement('p');info.textContent='Esta configuración se aplica a todos los cursos del ciclo. Automático: diciembre en diciembre y febrero en febrero, según la hora de Buenos Aires. Las decisiones manuales se mantienen hasta cambiarlas o volver a automático.';periodos.append(info);
   for(const p of config.periodos){
    const fila=document.createElement('div'),estado=document.createElement('span');estado.textContent=p.nombre+': '+(p.habilitado?'Habilitado':'Bloqueado')+' ('+p.modo+'). ';fila.append(estado);
    if(data.user.rango==='regente'&&puedeEscribir()){

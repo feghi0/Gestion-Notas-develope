@@ -421,7 +421,15 @@ function renderGlobales() {
     input.step = "0.01"; input.placeholder = "Nota";
     input.id   = `nota-${alumno.id}`;
     div.appendChild(span);
-    div.appendChild(input);
+    const control = document.createElement("label");
+    control.className = "control-participacion";
+    input.setAttribute("aria-label", `Calificación de ${alumno.apellido}, ${alumno.nombre}`);
+    const estado = document.createElement("span");
+    estado.className = "estado-participacion"; estado.hidden = true;
+    estado.setAttribute("aria-hidden", "true");
+    input.addEventListener("change", () => { estado.textContent = input.checked ? "Aplicar" : "Sin ajuste"; });
+    control.append(input, estado);
+    div.appendChild(control);
     contenedor.appendChild(div);
   }
   actualizarInputsNota();
@@ -433,12 +441,22 @@ function actualizarInputsNota() {
   for (const alumno of alumnosGlobales) {
     const input = document.getElementById(`nota-${alumno.id}`);
     if (!input) continue;
+    const estado = input.parentElement.querySelector('.estado-participacion');
     if (esPartic) {
-      input.min = "0"; input.max = "1"; input.step = "1"; input.placeholder = "0 o 1";
-      if (input.value !== "" && input.value !== "0" && input.value !== "1") input.value = "";
+      if (input.type !== 'checkbox') {
+        input.dataset.notaAnterior = input.value;
+        input.type = 'checkbox'; input.checked = false;
+      }
+      input.classList.add('participacion-switch'); input.setAttribute('role','switch');
+      input.setAttribute('aria-label', `Aplicar ${tipo} a ${alumno.apellido}, ${alumno.nombre}`);
+      input.value = '1'; input.setCustomValidity('');
+      estado.hidden = false; estado.textContent = input.checked ? 'Aplicar' : 'Sin ajuste';
     } else {
-      input.min = "1"; input.max = "10"; input.step = "0.01"; input.placeholder = "Nota";
-      if (input.value === "0" || input.value === "1") input.value = "";
+      if (input.type === 'checkbox') { input.type='number'; input.value=input.dataset.notaAnterior || ''; }
+      input.classList.remove('participacion-switch'); input.removeAttribute('role');
+      input.setAttribute('aria-label', `Calificación de ${alumno.apellido}, ${alumno.nombre}`);
+      input.min='1'; input.max='10'; input.step='0.01'; input.placeholder='Nota';
+      estado.hidden = true;
     }
   }
 }
@@ -476,10 +494,10 @@ async function guardarGlobal() {
   const notas = [];
   for (const alumno of alumnosGlobales) {
     const notaInput = document.getElementById(`nota-${alumno.id}`);
-    if (notaInput.value === "") continue;
-    let valor = Number(notaInput.value);
+    if (notaInput.disabled || (esParticipacion(tipo) ? !notaInput.checked : notaInput.value === "")) continue;
+    let valor = esParticipacion(tipo) ? 1 : Number(notaInput.value);
     if (esParticipacion(tipo)) {
-      if (valor !== 0 && valor !== 1) { mostrarMensaje("Para participación solo se puede cargar 0 (no sumó) o 1 (sí sumó).", "error"); return; }
+      if (!notaInput.checked) continue;
       if (valor === 0) continue;
       if      (tipo.includes("+1"))   valor =  1;
       else if (tipo.includes("+0.5")) valor =  0.5;

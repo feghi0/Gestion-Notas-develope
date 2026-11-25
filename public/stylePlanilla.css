@@ -1197,3 +1197,12 @@ body{padding-bottom:28px}
 .detalle-nota-dialog label{display:block;margin:12px 0}.detalle-nota-dialog input:not([type=checkbox]),.detalle-nota-dialog select,.detalle-nota-dialog textarea{display:block;width:100%;padding:9px;border:1px solid var(--border-strong);border-radius:6px}
 .detalle-nota-dialog button,.control-cierre button{padding:9px;margin:5px;cursor:pointer}.control-cierre{padding:16px;background:var(--surface);margin:16px 0}#detalleError{color:var(--red-dark)}
 @media print{.header,.global-form,.control-cierre,.scroll-planilla-fijo,.toggle-bimestre{display:none!important}.table-scroll{overflow:visible;max-height:none}#tablaPlanilla{width:100%;font-size:9px}thead{display:table-header-group}tr{break-inside:avoid}#tablaPlanilla th,#tablaPlanilla td{position:static;min-width:0} .contenido-bimestre{display:block!important}}
+
+.control-participacion{display:inline-flex;align-items:center;gap:10px;cursor:pointer}
+.alumno-global .participacion-switch{appearance:none;-webkit-appearance:none;width:48px;min-width:48px;height:28px;padding:0;margin:0;border:1px solid #64748b;border-radius:999px;background:#64748b;position:relative;cursor:pointer;transition:background .15s}
+.participacion-switch::before{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;background:white;border-radius:50%;transition:transform .15s}
+.alumno-global .participacion-switch:checked{background:#15803d;border-color:#15803d}
+.participacion-switch:checked::before{transform:translateX(20px)}
+.participacion-switch:focus-visible{outline:3px solid var(--brand-primary);outline-offset:3px}
+.participacion-switch:disabled{opacity:.45;cursor:not-allowed}
+.alumno-global .estado-participacion{font-size:12px;font-weight:600;min-width:65px;flex:none}
